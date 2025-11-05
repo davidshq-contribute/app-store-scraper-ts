@@ -142,58 +142,6 @@ export type ReviewEntry = z.infer<typeof reviewEntrySchema>;
 export type ReviewsFeed = z.infer<typeof reviewsFeedSchema>;
 
 /**
- * Search result schema
- */
-export const searchResultSchema = z.object({
-  trackId: z.number().optional(),
-  bundleId: z.string().optional(),
-  trackName: z.string().optional(),
-  trackViewUrl: z.string().optional(),
-  description: z.string().optional(),
-  artworkUrl512: z.string().optional(),
-  artworkUrl100: z.string().optional(),
-  genres: z.array(z.string()).optional(),
-  genreIds: z.array(z.string()).optional(),
-  primaryGenreName: z.string().optional(),
-  primaryGenreId: z.number().optional(),
-  contentAdvisoryRating: z.string().optional(),
-  languageCodesISO2A: z.array(z.string()).optional(),
-  fileSizeBytes: z.string().optional(),
-  minimumOsVersion: z.string().optional(),
-  releaseDate: z.string().optional(),
-  currentVersionReleaseDate: z.string().optional(),
-  releaseNotes: z.string().optional(),
-  version: z.string().optional(),
-  price: z.number().optional(),
-  currency: z.string().optional(),
-  artistId: z.number().optional(),
-  artistName: z.string().optional(),
-  artistViewUrl: z.string().optional(),
-  sellerUrl: z.string().optional(),
-  averageUserRating: z.number().optional(),
-  userRatingCount: z.number().optional(),
-  averageUserRatingForCurrentVersion: z.number().optional(),
-  userRatingCountForCurrentVersion: z.number().optional(),
-  screenshotUrls: z.array(z.string()).optional(),
-  ipadScreenshotUrls: z.array(z.string()).optional(),
-  appletvScreenshotUrls: z.array(z.string()).optional(),
-  supportedDevices: z.array(z.string()).optional(),
-  kind: z.string().optional(),
-});
-
-export const searchBubbleSchema = z.object({
-  results: z.array(searchResultSchema).optional(),
-});
-
-export const searchResponseSchema = z.object({
-  bubbles: z.array(searchBubbleSchema).optional(),
-});
-
-export type SearchResult = z.infer<typeof searchResultSchema>;
-export type SearchBubble = z.infer<typeof searchBubbleSchema>;
-export type SearchResponse = z.infer<typeof searchResponseSchema>;
-
-/**
  * Suggestion response schema
  */
 export const suggestDictSchema = z.object({

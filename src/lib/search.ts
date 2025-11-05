@@ -1,11 +1,7 @@
-import type { Dispatcher } from 'undici';
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
-import { doRequest, storeId, cleanApp } from './common.js';
-import {
-  searchResponseSchema,
-  type SearchResult,
-} from './schemas.js';
+import { doRequest, cleanApp } from './common.js';
+import { iTunesLookupResponseSchema } from './schemas.js';
 
 /**
  * Searches for apps in the App Store
@@ -32,27 +28,31 @@ import {
  * ```
  */
 export async function search(options: SearchOptions): Promise<App[] | number[]> {
-  const { term, num = 50, page = 1, country = 'us', lang = 'en-us', idsOnly, requestOptions } = options;
+  const { term, num = 50, page = 1, country = 'us', lang, idsOnly, requestOptions } = options;
 
   if (!term) {
     throw new Error('term is required');
   }
 
-  const store = storeId(country);
-  const url = `https://search.itunes.apple.com/WebObjects/MZStore.woa/wa/search?clientApplication=Software&media=software&term=${encodeURIComponent(term)}`;
+  // Build query parameters
+  const params = new URLSearchParams({
+    term,
+    country,
+    media: 'software',
+    entity: 'software',
+    limit: String(num)
+  });
 
-  const body = await doRequest(url, {
-    ...(requestOptions || {}),
-    headers: {
-      'X-Apple-Store-Front': `${store},24 t:native`,
-      'Accept-Language': lang,
-      ...(requestOptions?.headers || {}),
-    },
-  } as Dispatcher.RequestOptions);
+  if (lang) {
+    params.set('lang', lang);
+  }
+
+  const url = `https://itunes.apple.com/search?${params.toString()}`;
+  const body = await doRequest(url, requestOptions);
 
   // Parse and validate response with Zod
   const parsedData: unknown = JSON.parse(body);
-  const validationResult = searchResponseSchema.safeParse(parsedData);
+  const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
     throw new Error(
@@ -62,14 +62,14 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
 
   const response = validationResult.data;
 
-  // Extract results from first bubble
-  const bubble = response.bubbles?.[0];
-  const results = bubble?.results || [];
+  // iTunes Search API doesn't support pagination directly, so we handle it client-side
+  // Note: This means we fetch all results up to the limit and slice them
+  const allResults = response.results.filter((app) => app.kind === 'software');
 
   // Apply pagination
   const start = (page - 1) * num;
   const end = start + num;
-  const paginatedResults = results.slice(start, end);
+  const paginatedResults = allResults.slice(start, end);
 
   if (idsOnly) {
     return paginatedResults
@@ -78,8 +78,5 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   }
 
   // Convert to App objects
-  return paginatedResults
-    .filter((result): result is SearchResult & { trackId: number } => !!result.trackId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-    .map((result) => cleanApp(result as any));
+  return paginatedResults.map((result) => cleanApp(result));
 }
