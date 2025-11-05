@@ -1,6 +1,6 @@
 {
   "name": "app-store-scraper-ts",
-  "version": "1.0.2",
+  "version": "1.0.1",
   "description": "Modern TypeScript library to scrape application data from the iTunes/Mac App Store",
   "type": "module",
   "main": "./dist/index.cjs",
