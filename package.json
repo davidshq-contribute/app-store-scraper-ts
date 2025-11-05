@@ -14,7 +14,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
@@ -25,8 +27,16 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm run typecheck && npm run test:run"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plahteenlahti/app-store-scraper-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/plahteenlahti/app-store-scraper-ts/issues"
+  },
+  "homepage": "https://github.com/plahteenlahti/app-store-scraper-ts#readme",
   "keywords": [
     "app-store",
     "itunes",
@@ -35,9 +45,12 @@
     "ipad",
     "mac",
     "apple",
-    "typescript"
+    "typescript",
+    "app-data",
+    "reviews",
+    "ratings"
   ],
-  "author": "",
+  "author": "Perttu Lähteenlahti",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",
