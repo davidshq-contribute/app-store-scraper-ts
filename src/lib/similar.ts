@@ -1,8 +1,8 @@
+import * as cheerio from 'cheerio';
 import type { App } from '../types/app.js';
 import type { SimilarOptions } from '../types/options.js';
 import { doRequest, validateRequiredField, lookup } from './common.js';
 import { app as getApp } from './app.js';
-import { similarAppsSchema } from './schemas.js';
 
 /**
  * Retrieves similar apps ("Customers Also Bought" section)
@@ -30,39 +30,43 @@ export async function similar(options: SimilarOptions): Promise<App[]> {
     throw new Error('Could not resolve app id');
   }
 
-  const url = `https://itunes.apple.com/us/app/app/id${id}`;
+  // Build URL for "Customers Also Bought Apps" page
+  const url = `https://apps.apple.com/${country}/app/app/id${id}?see-all=customers-also-bought-apps&platform=iphone`;
 
-  const body = await doRequest(url, requestOptions);
-
-  // Extract similar app IDs using regex
-  const regex = /customersAlsoBoughtApps":\s*(\[.*?\])/;
-  const match = body.match(regex);
-
-  if (!match || !match[1]) {
-    return [];
-  }
-
+  let body: string;
   try {
-    const parsedData = JSON.parse(match[1]) as unknown;
-
-    // Validate response with Zod
-    const validationResult = similarAppsSchema.safeParse(parsedData);
-
-    if (!validationResult.success) {
-      throw new Error(
-        `Similar apps response validation failed: ${validationResult.error.message}`
-      );
-    }
-
-    const similarIds = validationResult.data;
-
-    if (similarIds.length === 0) {
-      return [];
-    }
-
-    // Fetch full details for similar apps
-    return lookup(similarIds, 'id', country, lang, requestOptions);
-  } catch {
+    body = await doRequest(url, requestOptions);
+  } catch (error) {
+    // If the page doesn't exist or request fails, return empty array
     return [];
   }
+
+  // Parse HTML with cheerio
+  const $ = cheerio.load(body);
+
+  // Extract app IDs from links in the grid
+  const similarIds: number[] = [];
+
+  // Find all links that contain "/app/" in their href
+  $('a[href*="/app/"]').each((_, element) => {
+    const href = $(element).attr('href');
+    if (href) {
+      // Extract ID from URL like "/fi/app/app-name/id123456"
+      const match = href.match(/\/id(\d+)/);
+      if (match && match[1]) {
+        const appId = parseInt(match[1], 10);
+        // Avoid duplicates and exclude the current app
+        if (!similarIds.includes(appId) && appId !== id) {
+          similarIds.push(appId);
+        }
+      }
+    }
+  });
+
+  if (similarIds.length === 0) {
+    return [];
+  }
+
+  // Fetch full details for similar apps
+  return lookup(similarIds, 'id', country, lang, requestOptions);
 }
