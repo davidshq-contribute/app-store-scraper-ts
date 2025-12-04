@@ -31,12 +31,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/plahteenlahti/app-store-scraper-ts.git"
+    "url": "git+https://github.com/plahteenlahti/app-store-scraper.git"
   },
   "bugs": {
-    "url": "https://github.com/plahteenlahti/app-store-scraper-ts/issues"
+    "url": "https://github.com/plahteenlahti/app-store-scraper/issues"
   },
-  "homepage": "https://github.com/plahteenlahti/app-store-scraper-ts#readme",
+  "homepage": "https://github.com/plahteenlahti/app-store-scraper#readme",
   "keywords": [
     "app-store",
     "itunes",
