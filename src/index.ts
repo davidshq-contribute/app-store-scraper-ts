@@ -35,7 +35,6 @@ export type {
   SuggestOptions,
   PrivacyOptions,
   VersionHistoryOptions,
-  MemoizeOptions,
   Collection,
   Category,
   Device,

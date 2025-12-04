@@ -18,7 +18,6 @@ export type {
   SuggestOptions,
   PrivacyOptions,
   VersionHistoryOptions,
-  MemoizeOptions,
 } from './options.js';
 export type { Collection, Category, Device, Sort } from './constants.js';
 export { collection, category, device, sort, markets } from './constants.js';
