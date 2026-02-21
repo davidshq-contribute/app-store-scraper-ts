@@ -21,11 +21,14 @@ export type {
   ListApp,
   RatingHistogram,
   Ratings,
+  SimilarApp,
+  SimilarLinkType,
   Review,
   VersionHistory,
   Suggestion,
   PrivacyDetails,
   PrivacyType,
+  RequestOptions,
   BaseOptions,
   AppOptions,
   ListOptions,
@@ -44,4 +47,4 @@ export type {
 } from './types/index.js';
 
 // Export constants
-export { collection, category, device, sort, markets } from './types/index.js';
+export { collection, category, device, sort, markets, DEFAULT_COUNTRY } from './types/index.js';

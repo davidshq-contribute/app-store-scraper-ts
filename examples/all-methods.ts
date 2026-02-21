@@ -157,10 +157,10 @@ async function testAllMethods() {
     // 7. similar() - Get similar apps
     console.log('\n7️⃣  Testing similar() method...');
     console.log(line);
-    const similarApps = await similar({ id: TEST_APP_ID });
+    const similarApps = await similar({ id: TEST_APP_ID, includeLinkType: true });
     console.log(`✅ Found ${similarApps.length} similar apps:`);
-    similarApps.slice(0, 5).forEach((app, i) => {
-      console.log(`   ${i + 1}. ${app.title} by ${app.developer}`);
+    similarApps.slice(0, 5).forEach(({ app, linkType }, i) => {
+      console.log(`   ${i + 1}. ${app.title} by ${app.developer} [${linkType}]`);
     });
 
     // 8. suggest() - Get search suggestions

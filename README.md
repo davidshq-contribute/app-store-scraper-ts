@@ -50,14 +50,16 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 
 - `app()` - Get detailed app information
 - `list()` - Get curated app lists (returns light `ListApp[]` by default; `fullDetail: true` for full `App[]`)
-- `search()` - Search for apps by keyword
+- `search()` - Search for apps by keyword (pagination limited to first 200 results; see JSDoc)
 - `developer()` - Get all apps from a developer
 - `reviews()` - Get user reviews for an app
 - `ratings()` - Get rating distribution histogram
-- `similar()` - Get similar/related apps
+- `similar()` - Get similar/related apps (returns `App[]` by default; pass `includeLinkType: true` for `SimilarApp[]` with `app` and `linkType`, e.g. `customers-also-bought`, `more-by-developer`)
 - `suggest()` - Get search suggestions
 - `privacy()` - Get privacy policy details
 - `versionHistory()` - Get version release history
+
+**Note:** `privacy()` and `versionHistory()` scrape Apple’s app page HTML and depend on its DOM structure; they may break if Apple changes the page. See `docs/DEV-DECISIONS.md` for details.
 
 ### Constants
 
@@ -65,6 +67,10 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 - `category` - App categories (GAMES, BUSINESS, etc.)
 - `sort` - Sort options for reviews (RECENT, HELPFUL)
 - `device` - Device types (IPAD, MAC, ALL)
+
+### Request options
+
+Most methods accept a `requestOptions` object (see `RequestOptions` in the types). **Supported:** `headers` (custom headers merged with defaults), `timeoutMs` (request timeout in ms; default 30000), `retries` (number of retries for 429/503/network errors with exponential backoff; default 2; set to 0 to disable).
 
 ## Development
 

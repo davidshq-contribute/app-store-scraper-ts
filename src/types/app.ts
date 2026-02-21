@@ -25,8 +25,10 @@ export interface ListApp {
   developer: string;
   /** Developer iTunes URL */
   developerUrl: string;
-  /** Developer ID (from feed; string when parsed from URL) */
+  /** Developer ID from feed (string; empty when unknown). Prefer {@link developerIdNum} for type alignment with {@link App}. */
   developerId: string;
+  /** Developer ID as number (0 when unknown). Use when handling {@link ListApp} and {@link App} uniformly. */
+  developerIdNum: number;
   /** Primary genre name */
   genre: string;
   /** Primary genre ID */
@@ -89,13 +91,19 @@ export interface App {
   developerUrl: string;
   /** Developer website URL (if available) */
   developerWebsite?: string;
-  /** Average user rating (current version) */
+  /**
+   * Average user rating (all versions).
+   * Use 0 as sentinel for unknown/unavailable; otherwise 1–5.
+   */
   score: number;
-  /** Total number of ratings (current version) */
-  reviews: number;
-  /** Average user rating (all versions) */
-  currentVersionScore: number;
   /** Total number of ratings (all versions) */
+  reviews: number;
+  /**
+   * Average user rating (current version).
+   * Use 0 as sentinel for unknown/unavailable; otherwise 1–5.
+   */
+  currentVersionScore: number;
+  /** Total number of ratings (current version) */
   currentVersionReviews: number;
   /** iPhone/iPod screenshot URLs */
   screenshots: string[];
@@ -133,4 +141,26 @@ export interface Ratings {
   ratings: number;
   /** Rating distribution by star count */
   histogram: RatingHistogram;
+}
+
+/**
+ * Section label for similar/related app links on an App Store app page.
+ * Typical values: "customers-also-bought", "more-by-developer", "you-might-also-like", "other".
+ */
+export type SimilarLinkType =
+  | 'customers-also-bought'
+  | 'more-by-developer'
+  | 'you-might-also-like'
+  | 'similar-apps'
+  | 'other';
+
+/**
+ * One similar/related app with the section it was found in.
+ * Returned by `similar()` when `includeLinkType: true`.
+ */
+export interface SimilarApp {
+  /** Full app details */
+  app: App;
+  /** Section where the link appeared (e.g. "Customers Also Bought", "More by developer") */
+  linkType: SimilarLinkType;
 }

@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { Ratings, RatingHistogram } from '../types/app.js';
 import type { RatingsOptions } from '../types/options.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest, storeId } from './common.js';
 
 /**
@@ -15,7 +16,7 @@ import { doRequest, storeId } from './common.js';
  * ```
  */
 export async function ratings(options: RatingsOptions): Promise<Ratings> {
-  const { id, country = 'us', requestOptions } = options;
+  const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
   if (!id) {
     throw new Error('id is required');
@@ -33,13 +34,19 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
   });
 
   if (html.length === 0) {
-    throw new Error('App not found (404)');
+    throw new Error(`No ratings data returned for app ${id}`);
   }
 
   return parseRatings(html);
 }
 
-function parseRatings(html: string): Ratings {
+/**
+ * Parses ratings from iTunes customer-reviews HTML.
+ * Exported for unit testing (histogram shape / BUG-2).
+ * @param html - Raw HTML from the customer-reviews page
+ * @returns Ratings with total count and histogram (keys 1–5 only)
+ */
+export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
   // Extract total rating count
@@ -48,15 +55,17 @@ function parseRatings(html: string): Ratings {
     ? parseInt(ratingsMatch[0], 10)
     : 0;
 
-  // Extract ratings by star (displayed from 5 to 1)
-  const ratingsByStar: number[] = $('.vote .total')
+  // Extract ratings by star (displayed from 5 to 1). Slice to exactly 5 so
+  // starRating = 5 - index is always 1–5 (avoids 0/-1 with wrong element count).
+  const rawByStar: number[] = $('.vote .total')
     .map((_, el) => {
       const n = parseInt($(el).text(), 10);
       return Number.isNaN(n) ? 0 : n;
     })
     .get();
+  const ratingsByStar = rawByStar.slice(0, 5);
 
-  // Build histogram (convert array index to star rating)
+  // Build histogram (convert array index to star rating 5,4,3,2,1)
   const histogram: RatingHistogram = ratingsByStar.reduce<RatingHistogram>(
     (acc, ratingsForStar, index) => {
       const starRating = (5 - index) as 1 | 2 | 3 | 4 | 5;

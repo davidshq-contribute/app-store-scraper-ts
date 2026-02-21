@@ -1,14 +1,28 @@
 import type { Collection, Category, Sort } from './constants.js';
 
+/**
+ * Options passed through to the underlying `fetch()` for HTTP requests.
+ *
+ * **Supported:**
+ * - `headers` – Custom headers merged over the default User-Agent, Accept, and Accept-Language.
+ * - `timeoutMs` – Request timeout in milliseconds (default: 30000). Uses `AbortSignal.timeout()`.
+ * - `retries` – Number of retries for transient failures (default: 2). Retries on 429, 503, and
+ *   network errors, with exponential backoff. Set to 0 to disable. Only applies to idempotent GETs.
+ */
 export interface RequestOptions {
+  /** Custom request headers (merged with defaults). */
   headers?: Record<string, string>;
+  /** Request timeout in milliseconds. Default 30000. */
+  timeoutMs?: number;
+  /** Number of retries for transient failures (429, 503, network). Default 2. Set 0 to disable. */
+  retries?: number;
 }
 
 /**
  * Common options for requests
  */
 export interface BaseOptions {
-  /** Two-letter country code (default: "us") */
+  /** Two-letter country code (default: {@link DEFAULT_COUNTRY}) */
   country?: string;
   /** Language code (e.g., "en-us") */
   lang?: string;
@@ -46,14 +60,18 @@ export interface ListOptions extends BaseOptions {
 }
 
 /**
- * Options for the search() method
+ * Options for the search() method.
+ *
+ * Pagination note: the iTunes Search API returns at most 200 results per query
+ * (no offset). So with `num` results per page, only pages 1 through
+ * ceil(200 / num) can return data; higher pages may be empty or partial.
  */
 export interface SearchOptions extends BaseOptions {
   /** Search term (required) */
   term: string;
   /** Number of results per page (default: 50) */
   num?: number;
-  /** Page number (default: 1) */
+  /** Page number (default: 1). Effective range is limited by the API's 200-result cap. */
   page?: number;
   /** Return only app IDs */
   idsOnly?: boolean;
@@ -97,6 +115,12 @@ export interface SimilarOptions extends BaseOptions {
   id?: number;
   /** Bundle ID */
   appId?: string;
+  /**
+   * If true, return `SimilarApp[]` (each item has `app` and `linkType`).
+   * If false or omitted, return `App[]` (backward compatible).
+   * @default false
+   */
+  includeLinkType?: boolean;
 }
 
 /**

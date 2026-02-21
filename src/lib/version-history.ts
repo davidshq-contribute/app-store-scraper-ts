@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { VersionHistory } from '../types/review.js';
 import type { VersionHistoryOptions } from '../types/options.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest } from './common.js';
 
 /**
@@ -14,7 +15,7 @@ import { doRequest } from './common.js';
  * ```
  */
 export async function versionHistory(options: VersionHistoryOptions): Promise<VersionHistory[]> {
-  const { id, country = 'us', requestOptions } = options;
+  const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
   if (!id) {
     throw new Error('id is required');
@@ -27,18 +28,14 @@ export async function versionHistory(options: VersionHistoryOptions): Promise<Ve
   // Parse the HTML
   const $ = cheerio.load(appPageBody);
 
-  // Find all version history entries in the dialog
+  // Find all version history entries in the dialog (structural selectors to avoid Svelte class hashes)
   const versions: VersionHistory[] = [];
 
-  // Select all article elements within the version history dialog
-  $('dialog[data-testid="dialog"] article.svelte-13339ih').each((_, element) => {
+  $('dialog[data-testid="dialog"] article').each((_, element) => {
     const $article = $(element);
 
-    // Extract release notes from the paragraph
-    const releaseNotes = $article.find('p.svelte-13339ih').text().trim();
-
-    // Extract version number from h4
-    const versionDisplay = $article.find('h4.svelte-13339ih').text().trim();
+    const releaseNotes = $article.find('> p').text().trim();
+    const versionDisplay = $article.find('> h4').text().trim();
 
     // Extract release date from time element
     const releaseDateRaw = $article.find('time').attr('datetime') || '';

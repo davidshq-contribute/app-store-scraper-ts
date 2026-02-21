@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { PrivacyDetails, PrivacyType } from '../types/review.js';
 import type { PrivacyOptions } from '../types/options.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest } from './common.js';
 
 /**
@@ -14,7 +15,7 @@ import { doRequest } from './common.js';
  * ```
  */
 export async function privacy(options: PrivacyOptions): Promise<PrivacyDetails> {
-  const { id, country = 'us', requestOptions } = options;
+  const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
   if (!id) {
     throw new Error('id is required');

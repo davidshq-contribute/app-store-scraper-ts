@@ -4,6 +4,11 @@ import type { SuggestOptions } from '../types/options.js';
 import { doRequest } from './common.js';
 import { suggestResponseSchema } from './schemas.js';
 
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+});
+
 /**
  * Retrieves search term suggestions (autocomplete)
  * @param options - Options including search term
@@ -26,12 +31,7 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
 
   const body = await doRequest(url, requestOptions);
 
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-  });
-
-  const parsedData = parser.parse(body) as unknown;
+  const parsedData = xmlParser.parse(body) as unknown;
 
   // Validate response with Zod
   const validationResult = suggestResponseSchema.safeParse(parsedData);

@@ -10,7 +10,9 @@ export interface Review {
   userUrl: string;
   /** App version this review is for */
   version: string;
-  /** Star rating (1-5) */
+  /**
+   * Star rating. 0 = missing/unparseable or if feed returns 0; otherwise 0–5.
+   */
   score: number;
   /** Review title/headline */
   title: string;

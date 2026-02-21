@@ -1,13 +1,28 @@
 import type { App } from '../types/app.js';
-import { markets } from '../types/constants.js';
+import { DEFAULT_COUNTRY, markets } from '../types/constants.js';
 import {
   iTunesLookupResponseSchema,
   type ITunesAppResponse,
 } from './schemas.js';
 import type { RequestOptions } from '../types/options.js';
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_RETRIES = 2;
+
+/** Returns true if the failure is transient and worth retrying (GET is idempotent). */
+function isRetryable(status?: number, err?: unknown): boolean {
+  if (status === 429 || status === 503) return true;
+  if (err instanceof TypeError) return true; // network / DNS / CORS etc.
+  return false;
+}
+
 /**
- * Makes an HTTP request
+ * Makes an HTTP GET request with optional timeout and retries.
+ * On non-OK response, throws an Error whose message includes the URL and status for easier debugging.
+ *
+ * - Uses `AbortSignal.timeout(timeoutMs)` (default 30s). Pass `requestOptions.timeoutMs` to override.
+ * - On 429, 503, or network errors, retries up to `requestOptions.retries` times (default 2) with
+ *   exponential backoff (1s, 2s, 4s). Set `retries: 0` to disable.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   const defaultHeaders: Record<string, string> = {
@@ -16,19 +31,47 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
     'Accept-Language': 'en-US,en;q=0.9',
   };
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      ...defaultHeaders,
-      ...(options?.headers || {}),
-    },
-  });
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxRetries = options?.retries ?? DEFAULT_RETRIES;
+  let lastError: Error | undefined;
 
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const signal = AbortSignal.timeout(timeoutMs);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...defaultHeaders,
+          ...(options?.headers || {}),
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        if (attempt < maxRetries && isRetryable(response.status)) {
+          // Consume body so the connection can be reused (fetch spec / connection pooling).
+          await response.text().catch(() => '');
+          const delayMs = 1000 * 2 ** attempt;
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        throw new Error(`Request to ${url} failed with status ${response.status}`);
+      }
+
+      return await response.text();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+      if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
+        const delayMs = 1000 * 2 ** attempt;
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw lastError;
+    }
   }
 
-  return response.text();
+  throw lastError ?? new Error('Request failed');
 }
 
 /**
@@ -88,9 +131,9 @@ export function cleanApp(app: ITunesAppResponse): App {
     developer: app.artistName || '',
     developerUrl: app.artistViewUrl || '',
     developerWebsite: app.sellerUrl,
-    score: app.averageUserRating || 0,
+    score: app.averageUserRating ?? 0, // 0 = sentinel for unknown
     reviews: app.userRatingCount || 0,
-    currentVersionScore: app.averageUserRatingForCurrentVersion || 0,
+    currentVersionScore: app.averageUserRatingForCurrentVersion ?? 0, // 0 = sentinel for unknown
     currentVersionReviews: app.userRatingCountForCurrentVersion || 0,
     screenshots: app.screenshotUrls || [],
     ipadScreenshots: app.ipadScreenshotUrls || [],
@@ -109,7 +152,7 @@ export type LookupId = number | number[] | string | string[];
 export async function lookup(
   ids: LookupId,
   idField: 'id' | 'bundleId' | 'artistId',
-  country = 'us',
+  country = DEFAULT_COUNTRY,
   lang?: string,
   requestOptions?: RequestOptions
 ): Promise<App[]> {

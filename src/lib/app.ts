@@ -1,16 +1,21 @@
 import * as cheerio from 'cheerio';
 import type { App } from '../types/app.js';
 import type { AppOptions } from '../types/options.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest, lookup, validateRequiredField } from './common.js';
 import { ratings } from './ratings.js';
 
 /**
- * Extracts a clean screenshot URL from srcset attribute
- * Takes the highest resolution version
+ * Extracts a clean screenshot URL from srcset attribute.
+ * Picks the highest-resolution variant and normalizes to a stable size and the original format.
+ *
+ * Normalization uses 392x696 (2x iPhone logical size) for a consistent, predictable URL.
+ * The same size is used for all device types (iPhone, iPad, Apple TV); the store page
+ * srcset may still reflect device-specific aspect ratios before normalization.
+ * Original image format (webp, jpg, png) is preserved.
  */
 function extractScreenshotUrl(srcset: string): string | null {
   // srcset format: "url1 300w, url2 600w, ..."
-  // We want the highest resolution (largest width)
   const entries = srcset.split(',').map(entry => {
     const parts = entry.trim().split(/\s+/);
     const url = parts[0];
@@ -20,14 +25,16 @@ function extractScreenshotUrl(srcset: string): string | null {
     return { url, width };
   });
 
-  // Sort by width descending and get the largest
   entries.sort((a, b) => b.width - a.width);
   const best = entries[0];
 
   if (best?.url) {
-    // Normalize the URL to a standard format
-    // Convert from sized format like /300x650bb.webp to a larger size
-    return best.url.replace(/\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)$/, '/392x696bb.png');
+    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png)
+    return best.url.replace(
+      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)$/i,
+      (_match: string, _opt: string | undefined, ext: string | undefined) =>
+        `/392x696bb.${(ext ?? 'webp').toLowerCase()}`
+    );
   }
 
   return null;
@@ -41,11 +48,9 @@ async function scrapeScreenshots(
   country: string,
   requestOptions?: AppOptions['requestOptions']
 ): Promise<{ screenshots: string[]; ipadScreenshots: string[]; appletvScreenshots: string[] }> {
-  const result = {
-    screenshots: [] as string[],
-    ipadScreenshots: [] as string[],
-    appletvScreenshots: [] as string[],
-  };
+  const screenshots = new Set<string>();
+  const ipadScreenshots = new Set<string>();
+  const appletvScreenshots = new Set<string>();
 
   try {
     const url = `https://apps.apple.com/${country}/app/id${appId}`;
@@ -61,10 +66,8 @@ async function scrapeScreenshots(
     $('ul.shelf-grid__list--grid-type-ScreenshotPhone source[type="image/webp"]').each((_, el) => {
       const srcset = $(el).attr('srcset');
       if (srcset) {
-        const url = extractScreenshotUrl(srcset);
-        if (url && !result.screenshots.includes(url)) {
-          result.screenshots.push(url);
-        }
+        const screenshotUrl = extractScreenshotUrl(srcset);
+        if (screenshotUrl) screenshots.add(screenshotUrl);
       }
     });
 
@@ -72,10 +75,8 @@ async function scrapeScreenshots(
     $('ul.shelf-grid__list--grid-type-ScreenshotPad source[type="image/webp"]').each((_, el) => {
       const srcset = $(el).attr('srcset');
       if (srcset) {
-        const url = extractScreenshotUrl(srcset);
-        if (url && !result.ipadScreenshots.includes(url)) {
-          result.ipadScreenshots.push(url);
-        }
+        const screenshotUrl = extractScreenshotUrl(srcset);
+        if (screenshotUrl) ipadScreenshots.add(screenshotUrl);
       }
     });
 
@@ -83,17 +84,25 @@ async function scrapeScreenshots(
     $('ul.shelf-grid__list--grid-type-ScreenshotAppleTv source[type="image/webp"]').each((_, el) => {
       const srcset = $(el).attr('srcset');
       if (srcset) {
-        const url = extractScreenshotUrl(srcset);
-        if (url && !result.appletvScreenshots.includes(url)) {
-          result.appletvScreenshots.push(url);
-        }
+        const screenshotUrl = extractScreenshotUrl(srcset);
+        if (screenshotUrl) appletvScreenshots.add(screenshotUrl);
       }
     });
-  } catch {
-    // If scraping fails, return empty arrays
+  } catch (error) {
+    // 404 = app page not found; treat as no screenshots. Other errors (timeout, 500, parse) rethrow.
+    const isNotFound =
+      error instanceof Error &&
+      (error.message.includes('status 404') || error.message.includes('App not found'));
+    if (!isNotFound) {
+      throw error;
+    }
   }
 
-  return result;
+  return {
+    screenshots: Array.from(screenshots),
+    ipadScreenshots: Array.from(ipadScreenshots),
+    appletvScreenshots: Array.from(appletvScreenshots),
+  };
 }
 
 /**
@@ -117,12 +126,9 @@ async function scrapeScreenshots(
 export async function app(options: AppOptions): Promise<App> {
   validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
 
-  const { id, appId, country = 'us', lang, ratings: includeRatings, requestOptions } = options;
-
-  const lookupId = id ?? appId;
-  if (lookupId === undefined) {
-    throw new Error('Either id or appId is required');
-  }
+  const { id, appId, country = DEFAULT_COUNTRY, lang, ratings: includeRatings, requestOptions } = options;
+  // lookupId is defined: validateRequiredField ensures at least one of id, appId is present
+  const lookupId = (id ?? appId) as string | number;
 
   const apps = await lookup(
     lookupId,
@@ -157,8 +163,14 @@ export async function app(options: AppOptions): Promise<App> {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
       appData.histogram = ratingsData.histogram;
     } catch (error) {
-      // Ratings might not be available for all apps
-      // Continue without histogram rather than failing
+      // 404, empty body, or "no ratings data" = ratings not available for this app; continue without histogram
+      const isRatingsUnavailable =
+        error instanceof Error &&
+        (error.message.includes('status 404') ||
+          error.message.includes('No ratings data returned for app'));
+      if (!isRatingsUnavailable) {
+        throw error;
+      }
     }
   }
 

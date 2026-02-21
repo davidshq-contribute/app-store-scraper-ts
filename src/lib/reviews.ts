@@ -1,6 +1,6 @@
 import type { Review } from '../types/review.js';
 import type { ReviewsOptions } from '../types/options.js';
-import { sort as sortConstants } from '../types/constants.js';
+import { DEFAULT_COUNTRY, sort as sortConstants } from '../types/constants.js';
 import { doRequest, validateRequiredField, ensureArray, parseJson } from './common.js';
 import { app } from './app.js';
 import { reviewsFeedSchema } from './schemas.js';
@@ -32,7 +32,7 @@ import { reviewsFeedSchema } from './schemas.js';
 export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
 
-  const { appId, page = 1, sort = sortConstants.RECENT, country = 'us', requestOptions } = options;
+  const { appId, page = 1, sort = sortConstants.RECENT, country = DEFAULT_COUNTRY, requestOptions } = options;
   let { id } = options;
 
   // Validate page range
@@ -73,10 +73,12 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   const reviewEntries = entries.slice(1);
 
   return reviewEntries.map((entry) => {
-    const rawScore = parseInt(entry['im:rating']?.label || '0', 10);
-    const score = Number.isNaN(rawScore)
-      ? 0
-      : Math.max(1, Math.min(5, rawScore));
+    const label = entry['im:rating']?.label;
+    const rawScore =
+      label === undefined || label === '' ? NaN : parseInt(label, 10);
+    // 0 = sentinel for missing or unparseable; valid ratings clamped to 0–5
+    const score =
+      Number.isNaN(rawScore) ? 0 : Math.max(0, Math.min(5, rawScore));
     return {
       id: entry.id?.label || '',
       userName: entry.author?.name?.label || '',

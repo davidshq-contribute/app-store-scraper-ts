@@ -1,4 +1,9 @@
 /**
+ * Default two-letter country code used when `country` is not provided in options.
+ */
+export const DEFAULT_COUNTRY = 'us';
+
+/**
  * App Store collection types
  */
 export const collection = {
@@ -121,7 +126,16 @@ export const sort = {
 export type Sort = (typeof sort)[keyof typeof sort];
 
 /**
- * Country code to Apple Store ID mapping
+ * Country code (ISO 3166-1 alpha-2) to Apple Store Front ID mapping.
+ * Used to validate the `country` option and to send `X-Apple-Store-Front` where required (e.g. ratings).
+ *
+ * **Source:** Apple’s Store Front IDs originally came from the iTunes Affiliate documentation
+ * (“Linking to the iTunes Music Store”, appendix). This list is derived from that and community
+ * mappings (e.g. [theiostream/5871770](https://gist.github.com/theiostream/5871770)), extended
+ * for newer stores. Apple does not publish an official up-to-date list; a dynamic source is
+ * `https://itunes.apple.com/WebObjects/MZStore.woa/wa/availableStoreFronts` (may require
+ * non-browser User-Agent). We use a static allowlist for security and offline use; if Apple
+ * adds or changes store IDs, this object may need a code change and release.
  */
 export const markets: Record<string, number> = {
   dz: 143563,

@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { app } from '../lib/app.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
+import { runIntegrationTests } from './integration.js';
 
 describe('screenshots', () => {
+  describe.skipIf(!runIntegrationTests)('live API', () => {
   // Test with the specified app ID 6756671942 (Bygone - Yesterday's Weather)
   // Note: This app's screenshots are not available via iTunes API but are scraped from the App Store page
   describe('app ID 6756671942 (Bygone - scraped screenshots)', () => {
@@ -129,12 +132,13 @@ describe('screenshots', () => {
 
   describe('screenshots for different countries', () => {
     it('should fetch screenshots regardless of country', { timeout: 15000 }, async () => {
-      const usResult = await app({ id: 479516143, country: 'us' });
+      const usResult = await app({ id: 479516143, country: DEFAULT_COUNTRY });
 
       // Screenshots should work regardless of country
       expect(usResult.screenshots).toBeDefined();
       expect(Array.isArray(usResult.screenshots)).toBe(true);
       expect(usResult.screenshots.length).toBeGreaterThan(0);
     });
+  });
   });
 });

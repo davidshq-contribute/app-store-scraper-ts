@@ -1,5 +1,6 @@
 import type { App } from '../types/app.js';
 import type { DeveloperOptions } from '../types/options.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { lookup } from './common.js';
 
 /**
@@ -13,7 +14,7 @@ import { lookup } from './common.js';
  * ```
  */
 export async function developer(options: DeveloperOptions): Promise<App[]> {
-  const { devId, country = 'us', lang, requestOptions } = options;
+  const { devId, country = DEFAULT_COUNTRY, lang, requestOptions } = options;
 
   if (!devId) {
     throw new Error('devId is required');
