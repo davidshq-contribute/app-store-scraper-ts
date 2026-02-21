@@ -71,10 +71,13 @@ export const rssFeedEntrySchema = z.object({
     .optional(),
 });
 
+/** RSS feed schema; entry may be a single object or array depending on response. */
 export const rssFeedSchema = z.object({
   feed: z
     .object({
-      entry: z.array(rssFeedEntrySchema).optional(),
+      entry: z
+        .union([rssFeedEntrySchema, z.array(rssFeedEntrySchema)])
+        .optional(),
     })
     .optional(),
 });

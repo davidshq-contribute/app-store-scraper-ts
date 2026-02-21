@@ -1,7 +1,7 @@
 import type { App } from '../types/app.js';
 import type { ListOptions } from '../types/options.js';
 import { collection as collectionConstants } from '../types/constants.js';
-import { doRequest, lookup } from './common.js';
+import { doRequest, lookup, ensureArray } from './common.js';
 import { rssFeedSchema } from './schemas.js';
 
 /**
@@ -66,8 +66,8 @@ export async function list(options: ListOptions = {}): Promise<App[]> {
 
   const data = validationResult.data;
 
-  // Extract app IDs from feed
-  const entries = data.feed?.entry || [];
+  // Extract app IDs from feed (entry can be single object or array in RSS/JSON)
+  const entries = ensureArray(data.feed?.entry);
   const ids = entries
     .map((entry) => {
       const id = entry.id?.attributes?.['im:id'];
