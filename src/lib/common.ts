@@ -154,7 +154,7 @@ export function cleanApp(app: ITunesAppResponse): App {
     contentRating: app.contentAdvisoryRating ?? '',
     languages: app.languageCodesISO2A ?? [],
     size: (() => {
-      const n = parseInt(app.fileSizeBytes ?? '0', 10);
+      const n = parseInt(String(app.fileSizeBytes ?? 0), 10);
       return Number.isNaN(n) ? 0 : n;
     })(),
     requiredOsVersion: app.minimumOsVersion ?? '',
