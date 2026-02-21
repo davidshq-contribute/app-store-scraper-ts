@@ -2,7 +2,9 @@ import * as cheerio from 'cheerio';
 import type { App } from '../types/app.js';
 import type { AppOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, lookup, validateRequiredField } from './common.js';
+import { appPageUrl, doRequest, lookup, validateRequiredField } from './common.js';
+import { validateCountry } from './validate.js';
+import { HttpError } from './errors.js';
 import { ratings } from './ratings.js';
 
 /**
@@ -13,15 +15,18 @@ import { ratings } from './ratings.js';
  * The same size is used for all device types (iPhone, iPad, Apple TV); the store page
  * srcset may still reflect device-specific aspect ratios before normalization.
  * Original image format (webp, jpg, png) is preserved.
+ *
+ * @internal Exported for fixture-based unit tests (screenshots.test.ts).
  */
-function extractScreenshotUrl(srcset: string): string | null {
+export function extractScreenshotUrl(srcset: string): string | null {
   // srcset format: "url1 300w, url2 600w, ..."
   const entries = srcset.split(',').map(entry => {
     const parts = entry.trim().split(/\s+/);
     const url = parts[0];
     const widthPart = parts[1];
     const widthMatch = widthPart?.match(/(\d+)w/);
-    const width = widthMatch?.[1] ? parseInt(widthMatch[1], 10) : 0;
+    const raw = widthMatch?.[1] ? parseInt(widthMatch[1], 10) : NaN;
+    const width = Number.isNaN(raw) ? 0 : raw;
     return { url, width };
   });
 
@@ -29,15 +34,71 @@ function extractScreenshotUrl(srcset: string): string | null {
   const best = entries[0];
 
   if (best?.url) {
-    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png)
+    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png).
+    // Optional (\\?.*)? allows Apple CDN query params (e.g. ?q=80) so normalization still matches.
     return best.url.replace(
-      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)$/i,
-      (_match: string, _opt: string | undefined, ext: string | undefined) =>
-        `/392x696bb.${(ext ?? 'webp').toLowerCase()}`
+      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)(\?.*)?$/i,
+      (_match: string, _opt: string | undefined, ext: string | undefined, query: string | undefined) =>
+        `/392x696bb.${(ext ?? 'webp').toLowerCase()}${query ?? ''}`
     );
   }
 
   return null;
+}
+
+/**
+ * Parses screenshot URLs from App Store page HTML using the same selectors as live scraping.
+ * Used by {@link scrapeScreenshots} and by fixture-based unit tests.
+ *
+ * @param html - Full or partial App Store app page HTML
+ * @returns Object with screenshots, ipadScreenshots, and appletvScreenshots arrays
+ * @internal Exported for fixture-based unit tests (screenshots.test.ts).
+ */
+export function parseScreenshotsFromHtml(html: string): {
+  screenshots: string[];
+  ipadScreenshots: string[];
+  appletvScreenshots: string[];
+} {
+  const screenshots = new Set<string>();
+  const ipadScreenshots = new Set<string>();
+  const appletvScreenshots = new Set<string>();
+
+  const $ = cheerio.load(html);
+
+  // Find screenshot containers by their class patterns
+  // iPhone screenshots: shelf-grid__list--grid-type-ScreenshotPhone
+  // iPad screenshots: shelf-grid__list--grid-type-ScreenshotPad
+  // Apple TV screenshots: shelf-grid__list--grid-type-ScreenshotAppleTv
+
+  $('ul.shelf-grid__list--grid-type-ScreenshotPhone source[type="image/webp"]').each((_, el) => {
+    const srcset = $(el).attr('srcset');
+    if (srcset) {
+      const screenshotUrl = extractScreenshotUrl(srcset);
+      if (screenshotUrl) screenshots.add(screenshotUrl);
+    }
+  });
+
+  $('ul.shelf-grid__list--grid-type-ScreenshotPad source[type="image/webp"]').each((_, el) => {
+    const srcset = $(el).attr('srcset');
+    if (srcset) {
+      const screenshotUrl = extractScreenshotUrl(srcset);
+      if (screenshotUrl) ipadScreenshots.add(screenshotUrl);
+    }
+  });
+
+  $('ul.shelf-grid__list--grid-type-ScreenshotAppleTv source[type="image/webp"]').each((_, el) => {
+    const srcset = $(el).attr('srcset');
+    if (srcset) {
+      const screenshotUrl = extractScreenshotUrl(srcset);
+      if (screenshotUrl) appletvScreenshots.add(screenshotUrl);
+    }
+  });
+
+  return {
+    screenshots: Array.from(screenshots),
+    ipadScreenshots: Array.from(ipadScreenshots),
+    appletvScreenshots: Array.from(appletvScreenshots),
+  };
 }
 
 /**
@@ -48,61 +109,21 @@ async function scrapeScreenshots(
   country: string,
   requestOptions?: AppOptions['requestOptions']
 ): Promise<{ screenshots: string[]; ipadScreenshots: string[]; appletvScreenshots: string[] }> {
-  const screenshots = new Set<string>();
-  const ipadScreenshots = new Set<string>();
-  const appletvScreenshots = new Set<string>();
-
   try {
-    const url = `https://apps.apple.com/${country}/app/id${appId}`;
+    const url = appPageUrl(country, appId);
     const body = await doRequest(url, requestOptions);
-    const $ = cheerio.load(body);
-
-    // Find screenshot containers by their class patterns
-    // iPhone screenshots: shelf-grid__list--grid-type-ScreenshotPhone
-    // iPad screenshots: shelf-grid__list--grid-type-ScreenshotPad
-    // Apple TV screenshots: shelf-grid__list--grid-type-ScreenshotAppleTv
-
-    // iPhone screenshots
-    $('ul.shelf-grid__list--grid-type-ScreenshotPhone source[type="image/webp"]').each((_, el) => {
-      const srcset = $(el).attr('srcset');
-      if (srcset) {
-        const screenshotUrl = extractScreenshotUrl(srcset);
-        if (screenshotUrl) screenshots.add(screenshotUrl);
-      }
-    });
-
-    // iPad screenshots
-    $('ul.shelf-grid__list--grid-type-ScreenshotPad source[type="image/webp"]').each((_, el) => {
-      const srcset = $(el).attr('srcset');
-      if (srcset) {
-        const screenshotUrl = extractScreenshotUrl(srcset);
-        if (screenshotUrl) ipadScreenshots.add(screenshotUrl);
-      }
-    });
-
-    // Apple TV screenshots
-    $('ul.shelf-grid__list--grid-type-ScreenshotAppleTv source[type="image/webp"]').each((_, el) => {
-      const srcset = $(el).attr('srcset');
-      if (srcset) {
-        const screenshotUrl = extractScreenshotUrl(srcset);
-        if (screenshotUrl) appletvScreenshots.add(screenshotUrl);
-      }
-    });
+    return parseScreenshotsFromHtml(body);
   } catch (error) {
     // 404 = app page not found; treat as no screenshots. Other errors (timeout, 500, parse) rethrow.
-    const isNotFound =
-      error instanceof Error &&
-      (error.message.includes('status 404') || error.message.includes('App not found'));
-    if (!isNotFound) {
+    if (!(error instanceof HttpError && error.status === 404)) {
       throw error;
     }
+    return {
+      screenshots: [],
+      ipadScreenshots: [],
+      appletvScreenshots: [],
+    };
   }
-
-  return {
-    screenshots: Array.from(screenshots),
-    ipadScreenshots: Array.from(ipadScreenshots),
-    appletvScreenshots: Array.from(appletvScreenshots),
-  };
 }
 
 /**
@@ -127,6 +148,7 @@ export async function app(options: AppOptions): Promise<App> {
   validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
 
   const { id, appId, country = DEFAULT_COUNTRY, lang, ratings: includeRatings, requestOptions } = options;
+  validateCountry(country);
   // lookupId is defined: validateRequiredField ensures at least one of id, appId is present
   const lookupId = (id ?? appId) as string | number;
 
@@ -163,12 +185,8 @@ export async function app(options: AppOptions): Promise<App> {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
       appData.histogram = ratingsData.histogram;
     } catch (error) {
-      // 404, empty body, or "no ratings data" = ratings not available for this app; continue without histogram
-      const isRatingsUnavailable =
-        error instanceof Error &&
-        (error.message.includes('status 404') ||
-          error.message.includes('No ratings data returned for app'));
-      if (!isRatingsUnavailable) {
+      // 404 = ratings endpoint not found; 204 = 200 OK but empty body (no ratings data). Continue without histogram.
+      if (!(error instanceof HttpError && (error.status === 404 || error.status === 204))) {
         throw error;
       }
     }

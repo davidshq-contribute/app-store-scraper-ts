@@ -3,8 +3,9 @@ import type { App } from '../types/app.js';
 import type { SimilarApp, SimilarLinkType } from '../types/app.js';
 import type { SimilarOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, validateRequiredField, lookup } from './common.js';
-import { app as getApp } from './app.js';
+import { appPageUrl, doRequest, validateRequiredField, lookup, resolveAppId } from './common.js';
+import { validateCountry } from './validate.js';
+import { HttpError } from './errors.js';
 
 /** Section heading text patterns (case-insensitive) mapped to linkType. */
 const SECTION_PATTERNS: Array<{ pattern: RegExp; linkType: SimilarLinkType }> = [
@@ -14,7 +15,11 @@ const SECTION_PATTERNS: Array<{ pattern: RegExp; linkType: SimilarLinkType }> = 
   { pattern: /similar\s+apps|related\s+apps/i, linkType: 'similar-apps' },
 ];
 
-function getLinkTypeFromHeadingText(text: string): SimilarLinkType {
+/**
+ * Maps section heading text to a similar-link type. Used for parsing "Customers Also Bought",
+ * "More by developer", etc. Exported for fixture-based unit tests.
+ */
+export function getLinkTypeFromHeadingText(text: string): SimilarLinkType {
   const trimmed = text.trim();
   for (const { pattern, linkType } of SECTION_PATTERNS) {
     if (pattern.test(trimmed)) return linkType;
@@ -51,27 +56,27 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
   validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
 
   const { appId, country = DEFAULT_COUNTRY, lang, requestOptions, includeLinkType = false } = options;
+  validateCountry(country);
   let { id } = options;
 
-  // If appId is provided, resolve to id first
-  if (appId && !id) {
-    const appData = await getApp({ appId, country, requestOptions });
-    id = appData.id;
+  // If appId is provided, resolve to id first (lightweight lookup only)
+  if (appId && id == null) {
+    id = await resolveAppId({ appId, country, requestOptions });
   }
 
-  if (!id) {
+  if (id == null) {
     throw new Error('Could not resolve app id');
   }
 
   // Build URL for main app page (contains similar apps embedded in HTML)
-  const url = `https://apps.apple.com/${country}/app/id${id}`;
+  const url = appPageUrl(country, id);
 
   let body: string;
   try {
     body = await doRequest(url, requestOptions);
   } catch (error) {
     // 404 means the app page does not exist; treat as "no similar apps"
-    if (error instanceof Error && error.message.includes('status 404')) {
+    if (error instanceof HttpError && error.status === 404) {
       return [];
     }
     throw error;
@@ -80,9 +85,12 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
   // Parse HTML with cheerio
   const $ = cheerio.load(body);
 
-  // Collect (id, linkType) in document order by walking headings and app links together
+  // Collect (id, linkType) in document order by walking headings and app links together.
+  // Only collect app links that appear after the first recognized "similar" section heading
+  // so we avoid including breadcrumb/nav /app/ links as false positives.
   const entries: Array<{ id: number; linkType: SimilarLinkType }> = [];
   let currentLinkType: SimilarLinkType = 'other';
+  let seenKnownSection = false;
 
   $('body')
     .find('h2, h3, h4, a[href*="/app/"]')
@@ -91,6 +99,7 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
       const tagName = element.tagName?.toLowerCase();
 
       if (tagName === 'a') {
+        if (!seenKnownSection) return;
         const href = $el.attr('href');
         if (href) {
           const match = href.match(/\/id(\d+)/);
@@ -106,6 +115,7 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
 
       if (tagName === 'h2' || tagName === 'h3' || tagName === 'h4') {
         currentLinkType = getLinkTypeFromHeadingText($el.text());
+        if (currentLinkType !== 'other') seenKnownSection = true;
       }
     });
 

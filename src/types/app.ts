@@ -25,14 +25,12 @@ export interface ListApp {
   developer: string;
   /** Developer iTunes URL */
   developerUrl: string;
-  /** Developer ID from feed (string; empty when unknown). Prefer {@link developerIdNum} for type alignment with {@link App}. */
-  developerId: string;
-  /** Developer ID as number (0 when unknown). Use when handling {@link ListApp} and {@link App} uniformly. */
-  developerIdNum: number;
+  /** Developer ID (numeric; 0 when unknown). Matches {@link App}.developerId. */
+  developerId: number;
   /** Primary genre name */
   genre: string;
-  /** Primary genre ID */
-  genreId: string;
+  /** Primary genre ID (numeric; 0 when unknown). Matches {@link App}.primaryGenreId. */
+  genreId: number;
   /** Initial release date */
   released: string;
 }
@@ -55,18 +53,18 @@ export interface App {
   icon: string;
   /** Array of genre names */
   genres: string[];
-  /** Array of genre IDs */
-  genreIds: string[];
+  /** Array of genre IDs (numeric) */
+  genreIds: number[];
   /** Primary genre name */
   primaryGenre: string;
-  /** Primary genre ID */
-  primaryGenreId: string;
-  /** Content rating (e.g., "4+", "12+", "17+") */
+  /** Primary genre ID (numeric; 0 when unknown). Aligns with {@link category} constants. */
+  primaryGenreId: number;
+  /** Content rating (e.g., "4+", "12+", "17+"); empty string when unknown. */
   contentRating: string;
   /** Supported languages (array of language codes) */
   languages: string[];
   /** File size in bytes */
-  size: string;
+  size: number;
   /** Required iOS/macOS version */
   requiredOsVersion: string;
   /** Initial release date */

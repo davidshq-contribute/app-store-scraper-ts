@@ -11,7 +11,8 @@ export interface Review {
   /** App version this review is for */
   version: string;
   /**
-   * Star rating. 0 = missing/unparseable or if feed returns 0; otherwise 0–5.
+   * Star rating. Valid values are 1–5. Use 0 to mean missing or invalid (unparseable
+   * or absent in the feed); treat 0 as "no rating" in consumers.
    */
   score: number;
   /** Review title/headline */

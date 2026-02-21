@@ -1,12 +1,35 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import * as common from '../lib/common.js';
 import { app } from '../lib/app.js';
 import { runIntegrationTests } from './integration.js';
+
+vi.mock('../lib/common.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof common>();
+  return {
+    ...actual,
+    lookup: vi.fn((...args: Parameters<typeof actual.lookup>) => actual.lookup(...args)),
+  };
+});
 
 describe('app', () => {
   it('should throw error when neither id nor appId is provided', async () => {
     await expect(
       app({})
     ).rejects.toThrow('Either id or appId is required');
+  });
+
+  it('throws Error when lookup returns no results (by id)', async () => {
+    vi.mocked(common.lookup).mockResolvedValueOnce([]);
+    const err = await app({ id: 999999 }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('App not found: 999999');
+  });
+
+  it('throws Error when lookup returns no results (by appId)', async () => {
+    vi.mocked(common.lookup).mockResolvedValueOnce([]);
+    const err = await app({ appId: 'com.nonexistent.fake' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('App not found: com.nonexistent.fake');
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
@@ -37,8 +60,9 @@ describe('app', () => {
       const result = await app({ id: 479516143, ratings: true });
 
       expect(result).toBeDefined();
+      expect(result.histogram).not.toBeNull();
       expect(result.histogram).toBeDefined();
-      expect(typeof result.histogram).toBe('object');
+      expect(Object.keys(result.histogram!).sort()).toEqual(['1', '2', '3', '4', '5']);
     });
   });
 });

@@ -17,9 +17,9 @@ export const iTunesAppResponseSchema = z.looseObject({
   artworkUrl512: z.string().optional(),
   artworkUrl100: z.string().optional(),
   genres: z.array(z.string()).optional(),
-  genreIds: z.array(z.string()).optional(),
+  genreIds: z.array(z.coerce.number()).optional(),
   primaryGenreName: z.string().optional(),
-  primaryGenreId: z.number().optional(),
+  primaryGenreId: z.coerce.number().optional(),
   contentAdvisoryRating: z.string().optional(),
   languageCodesISO2A: z.array(z.string()).optional(),
   fileSizeBytes: z.string().optional(),
@@ -73,7 +73,12 @@ export const rssFeedEntrySchema = z.looseObject({
     })
     .optional(),
   'im:name': z.object({ label: z.string().optional() }).optional(),
-  'im:image': z.array(z.object({ label: z.string().optional() })).optional(),
+  'im:image': z
+    .union([
+      z.object({ label: z.string().optional() }),
+      z.array(z.object({ label: z.string().optional() })),
+    ])
+    .optional(),
   link: z
     .union([
       z.object({
@@ -133,7 +138,7 @@ export const rssFeedSchema = z.object({
     .optional(),
 });
 
-export type RSSFeed = z.infer<typeof rssFeedSchema>;
+export type RssFeed = z.infer<typeof rssFeedSchema>;
 
 /**
  * Review entry schema
@@ -212,7 +217,9 @@ export const suggestResponseSchema = z.object({
             .union([
               z.string(),
               z.object({
-                dict: z.array(suggestDictSchema).optional(),
+                dict: z
+                  .union([suggestDictSchema, z.array(suggestDictSchema)])
+                  .optional(),
               }),
             ])
             .optional(),

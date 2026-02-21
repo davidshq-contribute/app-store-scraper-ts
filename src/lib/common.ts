@@ -4,10 +4,22 @@ import {
   iTunesLookupResponseSchema,
   type ITunesAppResponse,
 } from './schemas.js';
-import type { RequestOptions } from '../types/options.js';
+import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
+import { HttpError } from './errors.js';
+import { validateCountry } from './validate.js';
 
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_RETRIES = 2;
+const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_RETRIES = 0;
+
+/**
+ * Builds the App Store app page URL for a given country and numeric app (track) id.
+ * Only numeric IDs produce valid URLs; bundle IDs must be resolved to a track id first.
+ * Used by app (screenshots), similar, privacy, and versionHistory.
+ * @internal
+ */
+export function appPageUrl(country: string, appId: number): string {
+  return `https://apps.apple.com/${country}/app/id${appId}`;
+}
 
 /** Returns true if the failure is transient and worth retrying (GET is idempotent). */
 function isRetryable(status?: number, err?: unknown): boolean {
@@ -18,11 +30,17 @@ function isRetryable(status?: number, err?: unknown): boolean {
 
 /**
  * Makes an HTTP GET request with optional timeout and retries.
- * On non-OK response, throws an Error whose message includes the URL and status for easier debugging.
+ * On non-OK response, throws an {@link HttpError} (extends Error) with `status` and optional `url`
+ * so consumers can match on `error.status === 404` instead of parsing the message.
  *
- * - Uses `AbortSignal.timeout(timeoutMs)` (default 30s). Pass `requestOptions.timeoutMs` to override.
- * - On 429, 503, or network errors, retries up to `requestOptions.retries` times (default 2) with
- *   exponential backoff (1s, 2s, 4s). Set `retries: 0` to disable.
+ * - Uses `AbortSignal.timeout(timeoutMs)` (default 15s). Pass `requestOptions.timeoutMs` to override.
+ *   Must be a positive finite number; invalid values throw a clear error before any request.
+ * - On 429, 503, network errors, or timeout (AbortError), retries up to `requestOptions.retries` times
+ *   (default 0 — opt-in). Set `retries` to a positive value (e.g. 2) to enable; exponential backoff 1s, 2s, 4s.
+ *   Invalid values (negative, NaN, non-integer) are clamped to 0 so at least one attempt is always made.
+ *   With retries enabled, total wait on repeated timeouts can be up to `timeoutMs * (1 + retries)` plus backoff.
+ * - Each request is independent: other concurrent calls (e.g. other crawls) are not blocked; only the call
+ *   that made the request blocks until it completes or times out.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   const defaultHeaders: Record<string, string> = {
@@ -32,7 +50,13 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
   };
 
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const maxRetries = options?.retries ?? DEFAULT_RETRIES;
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(
+      `Invalid timeoutMs: must be a positive number, got ${timeoutMs === 0 ? '0' : String(timeoutMs)}`
+    );
+  }
+  const rawRetries = options?.retries ?? DEFAULT_RETRIES;
+  const maxRetries = Math.max(0, Math.floor(Number(rawRetries)) || 0);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -42,7 +66,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
         method: 'GET',
         headers: {
           ...defaultHeaders,
-          ...(options?.headers || {}),
+          ...(options?.headers ?? {}),
         },
         signal,
       });
@@ -55,7 +79,11 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
           await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
-        throw new Error(`Request to ${url} failed with status ${response.status}`);
+        throw new HttpError(
+          `Request to ${url} failed with status ${response.status}`,
+          response.status,
+          url,
+        );
       }
 
       return await response.text();
@@ -82,6 +110,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
  * @param context - Optional context (e.g. response status) for error messages
  * @returns Parsed value as unknown
  * @throws Error with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
+ * @internal
  */
 export function parseJson(
   body: string,
@@ -102,47 +131,59 @@ export function parseJson(
 }
 
 /**
- * Cleans and transforms an iTunes API response to our App format
+ * Cleans and transforms an iTunes API response to our App format.
+ * @internal
  */
 export function cleanApp(app: ITunesAppResponse): App {
   return {
-    id: app.trackId || 0,
-    appId: app.bundleId || '',
-    title: app.trackName || '',
-    url: app.trackViewUrl || '',
-    description: app.description || '',
-    icon: app.artworkUrl512 || app.artworkUrl100 || '',
-    genres: app.genres || [],
-    genreIds: (app.genreIds || []).map(String),
-    primaryGenre: app.primaryGenreName || '',
-    primaryGenreId: String(app.primaryGenreId || ''),
-    contentRating: app.contentAdvisoryRating || '4+',
-    languages: app.languageCodesISO2A || [],
-    size: app.fileSizeBytes || '0',
-    requiredOsVersion: app.minimumOsVersion || '',
-    released: app.releaseDate || '',
-    updated: app.currentVersionReleaseDate || '',
-    releaseNotes: app.releaseNotes || '',
-    version: app.version || '',
-    price: app.price || 0,
-    currency: app.currency || 'USD',
-    free: (app.price || 0) === 0,
-    developerId: app.artistId || 0,
-    developer: app.artistName || '',
-    developerUrl: app.artistViewUrl || '',
+    id: app.trackId ?? 0,
+    appId: app.bundleId ?? '',
+    title: app.trackName ?? '',
+    url: app.trackViewUrl ?? '',
+    description: app.description ?? '',
+    icon: app.artworkUrl512 ?? app.artworkUrl100 ?? '',
+    genres: app.genres ?? [],
+    genreIds: (app.genreIds ?? [])
+      .map((id) => parseInt(String(id), 10))
+      .filter((n) => !Number.isNaN(n)),
+    primaryGenre: app.primaryGenreName ?? '',
+    primaryGenreId: (() => {
+      const n = parseInt(String(app.primaryGenreId ?? 0), 10);
+      return Number.isNaN(n) ? 0 : n;
+    })(),
+    contentRating: app.contentAdvisoryRating ?? '',
+    languages: app.languageCodesISO2A ?? [],
+    size: (() => {
+      const n = parseInt(app.fileSizeBytes ?? '0', 10);
+      return Number.isNaN(n) ? 0 : n;
+    })(),
+    requiredOsVersion: app.minimumOsVersion ?? '',
+    released: app.releaseDate ?? '',
+    updated: app.currentVersionReleaseDate ?? '',
+    releaseNotes: app.releaseNotes ?? '',
+    version: app.version ?? '',
+    price: app.price ?? 0,
+    currency: app.currency ?? 'USD',
+    free: (app.price ?? 0) === 0,
+    developerId: app.artistId ?? 0,
+    developer: app.artistName ?? '',
+    developerUrl: app.artistViewUrl ?? '',
     developerWebsite: app.sellerUrl,
     score: app.averageUserRating ?? 0, // 0 = sentinel for unknown
-    reviews: app.userRatingCount || 0,
+    reviews: app.userRatingCount ?? 0, // 0 is valid (no reviews)
     currentVersionScore: app.averageUserRatingForCurrentVersion ?? 0, // 0 = sentinel for unknown
-    currentVersionReviews: app.userRatingCountForCurrentVersion || 0,
-    screenshots: app.screenshotUrls || [],
-    ipadScreenshots: app.ipadScreenshotUrls || [],
-    appletvScreenshots: app.appletvScreenshotUrls || [],
-    supportedDevices: app.supportedDevices || [],
+    currentVersionReviews: app.userRatingCountForCurrentVersion ?? 0, // 0 is valid (no reviews)
+    screenshots: app.screenshotUrls ?? [],
+    ipadScreenshots: app.ipadScreenshotUrls ?? [],
+    appletvScreenshots: app.appletvScreenshotUrls ?? [],
+    supportedDevices: app.supportedDevices ?? [],
   };
 }
 
-/** ID type for lookup: numeric (id, artistId) or string (bundleId). */
+/**
+ * ID type for lookup: numeric (id, artistId) or string (bundleId).
+ * @internal
+ */
 export type LookupId = number | number[] | string | string[];
 
 /**
@@ -156,7 +197,7 @@ export async function lookup(
   lang?: string,
   requestOptions?: RequestOptions
 ): Promise<App[]> {
-  const idsArray = Array.isArray(ids) ? ids : [ids];
+  const idsArray = ensureArray(ids);
   const idsString = idsArray.map(String).join(',');
 
   // Map idField to the correct URL parameter name
@@ -196,7 +237,27 @@ export async function lookup(
 }
 
 /**
- * Gets the Apple Store ID for a given country code
+ * Resolves a bundle ID to a numeric track ID via a single iTunes lookup.
+ * Use this when you only need the numeric id (e.g. for similar/reviews) instead of
+ * calling {@link app}, which also may fetch screenshots and ratings.
+ *
+ * @param options - Must include `appId` (bundle ID); optional `country`, `requestOptions`
+ * @returns The numeric track ID
+ * @throws Error if the app is not found
+ */
+export async function resolveAppId(options: ResolveAppIdOptions): Promise<number> {
+  const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
+  validateCountry(country);
+  const apps = await lookup(appId, 'bundleId', country, undefined, requestOptions);
+  if (apps.length === 0) {
+    throw new Error(`App not found: ${appId}`);
+  }
+  return apps[0]!.id;
+}
+
+/**
+ * Gets the Apple Store ID for a given country code.
+ * @internal
  */
 export function storeId(country: string): number {
   const id = markets[country.toLowerCase()];
@@ -205,16 +266,15 @@ export function storeId(country: string): number {
 
 /**
  * Ensures an array from a value that could be undefined, null, a single item, or an array.
+ * @internal
  */
 export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
-  if (value === undefined || value === null) {
-    return [];
-  }
-  return Array.isArray(value) ? value : [value];
+  return value == null ? [] : Array.isArray(value) ? value : [value];
 }
 
 /**
- * Validates that at least one of the required fields is present
+ * Validates that at least one of the required fields is present.
+ * @internal
  */
 export function validateRequiredField(
   options: Record<string, unknown>,

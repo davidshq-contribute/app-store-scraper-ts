@@ -2,24 +2,24 @@ import type { App, ListApp } from '../types/app.js';
 import type { ListOptions } from '../types/options.js';
 import { collection as collectionConstants, DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest, lookup, ensureArray, parseJson } from './common.js';
+import { validateCountry, validateCollection, validateCategory, validateListNum } from './validate.js';
 import { rssFeedSchema, type RssFeedEntry } from './schemas.js';
 
 /** Parses the app URL from a list feed entry (link with rel="alternate"). */
 function parseEntryLink(entry: RssFeedEntry): string {
   const link = entry.link;
   if (!link) return '';
-  const links = Array.isArray(link) ? link : [link];
+  const links = ensureArray(link);
   const alternate = links.find((l) => l.attributes?.rel === 'alternate');
   return alternate?.attributes?.href ?? '';
 }
 
-/** Parses developer ID from artist href (e.g. .../id123?...). Returns string (raw segment, '' when missing) and number (0 when invalid) for backwards compatibility and type alignment with App. */
-function parseDeveloperIdFromHref(href: string | undefined): { str: string; num: number } {
-  if (!href?.includes('/id')) return { str: '', num: 0 };
-  const part = href.split('/id')[1];
-  const segment = part?.split('?')[0]?.split('/')[0] ?? '';
-  const n = segment ? parseInt(segment, 10) : NaN;
-  return { str: segment, num: Number.isNaN(n) ? 0 : n };
+/** Parses developer ID from artist href (e.g. .../id123?...). Returns numeric ID or 0 when unknown. */
+function parseDeveloperIdFromHref(href: string | undefined): number {
+  const match = href?.match(/\/id(\d+)/);
+  const idStr = match?.[1];
+  if (idStr === undefined) return 0;
+  return parseInt(idStr, 10);
 }
 
 /**
@@ -34,16 +34,20 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
 
   const imPrice = entry['im:price'];
   const amount = imPrice?.attributes?.amount;
-  const price = typeof amount === 'number' ? amount : parseFloat(String(amount ?? 0));
+  const price = (() => {
+    const v = typeof amount === 'number' ? amount : parseFloat(String(amount ?? 0));
+    return Number.isNaN(v) ? 0 : v;
+  })();
   const currency = imPrice?.attributes?.currency ?? 'USD';
 
   const imImage = entry['im:image'];
-  const lastImage = Array.isArray(imImage) && imImage.length > 0 ? imImage[imImage.length - 1] : undefined;
+  const imImageArray = Array.isArray(imImage) ? imImage : imImage != null ? [imImage] : [];
+  const lastImage = imImageArray.length > 0 ? imImageArray[imImageArray.length - 1] : undefined;
   const icon = lastImage?.label ?? '';
 
   const imArtist = entry['im:artist'];
   const artistHref = imArtist?.attributes?.href;
-  const { str: developerId, num: developerIdNum } = parseDeveloperIdFromHref(artistHref);
+  const developerId = parseDeveloperIdFromHref(artistHref);
 
   return {
     id,
@@ -58,9 +62,11 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
     developer: imArtist?.label ?? '',
     developerUrl: artistHref ?? '',
     developerId,
-    developerIdNum,
     genre: entry.category?.attributes?.label ?? '',
-    genreId: entry.category?.attributes?.['im:id'] ?? '',
+    genreId: (() => {
+      const n = parseInt(String(entry.category?.attributes?.['im:id'] ?? 0), 10);
+      return Number.isNaN(n) ? 0 : n;
+    })(),
     released: entry['im:releaseDate']?.label ?? '',
   };
 }
@@ -73,7 +79,8 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  * and returns {@link App[]}.
  *
  * @param options - Options for filtering and pagination
- * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true
+ * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true.
+ *   If `fullDetail` is a boolean variable, the return type is {@link ListApp[]} | {@link App[]}.
  *
  * @example
  * ```typescript
@@ -90,6 +97,7 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  */
 export async function list(options: ListOptions & { fullDetail: true }): Promise<App[]>;
 export async function list(options?: ListOptions & { fullDetail?: false }): Promise<ListApp[]>;
+export async function list(options: ListOptions): Promise<ListApp[] | App[]>;
 export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]> {
   const {
     collection = collectionConstants.TOP_FREE_IOS,
@@ -100,6 +108,11 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
     fullDetail = false,
     requestOptions,
   } = options;
+
+  validateCountry(country);
+  validateCollection(collection);
+  if (category != null) validateCategory(category);
+  validateListNum(num);
 
   const limit = Math.min(num, 200);
 

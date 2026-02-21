@@ -1,6 +1,6 @@
 {
   "name": "@perttu/app-store-scraper",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "Modern TypeScript library to scrape application data from the iTunes/Mac App Store",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -9,8 +9,9 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "default": "./dist/index.cjs"
     }
   },
   "files": [
@@ -20,7 +21,8 @@
   ],
   "scripts": {
     "build": "tsup",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:run": "vitest run",
     "test:integration": "RUN_INTEGRATION_TESTS=1 vitest run",
     "test:coverage": "vitest run --coverage",
@@ -55,6 +57,7 @@
   ],
   "author": "Perttu Lähteenlahti",
   "license": "MIT",
+  "publishConfig": { "access": "public" },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",

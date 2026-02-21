@@ -1,20 +1,20 @@
-import type { Collection, Category, Sort } from './constants.js';
+import type { Collection, Category, Device, Sort } from './constants.js';
 
 /**
  * Options passed through to the underlying `fetch()` for HTTP requests.
  *
  * **Supported:**
  * - `headers` – Custom headers merged over the default User-Agent, Accept, and Accept-Language.
- * - `timeoutMs` – Request timeout in milliseconds (default: 30000). Uses `AbortSignal.timeout()`.
- * - `retries` – Number of retries for transient failures (default: 2). Retries on 429, 503, and
- *   network errors, with exponential backoff. Set to 0 to disable. Only applies to idempotent GETs.
+ * - `timeoutMs` – Request timeout in milliseconds (default: 15000). Must be a positive finite number. Uses `AbortSignal.timeout()`.
+ * - `retries` – Number of retries for transient failures (default: 0, opt-in). Retries on 429, 503,
+ *   network errors, and timeout (AbortError), with exponential backoff. Set to a positive value (e.g. 2) to enable.
  */
 export interface RequestOptions {
   /** Custom request headers (merged with defaults). */
   headers?: Record<string, string>;
-  /** Request timeout in milliseconds. Default 30000. */
+  /** Request timeout in milliseconds. Must be positive and finite. Default 15000. */
   timeoutMs?: number;
-  /** Number of retries for transient failures (429, 503, network). Default 2. Set 0 to disable. */
+  /** Number of retries for transient failures (429, 503, network, timeout). Default 0 (opt-in). Set e.g. 2 to enable. */
   retries?: number;
 }
 
@@ -28,6 +28,14 @@ export interface BaseOptions {
   lang?: string;
   /** Custom request options */
   requestOptions?: RequestOptions;
+}
+
+/**
+ * Options for resolving a bundle ID to a numeric track ID
+ */
+export interface ResolveAppIdOptions extends BaseOptions {
+  /** Bundle ID (e.g., com.example.app) */
+  appId: string;
 }
 
 /**
@@ -73,6 +81,8 @@ export interface SearchOptions extends BaseOptions {
   num?: number;
   /** Page number (default: 1). Effective range is limited by the API's 200-result cap. */
   page?: number;
+  /** Device / store filter: iPad apps, Mac apps, or all (default: all). Use {@link device} constants. */
+  device?: Device;
   /** Return only app IDs */
   idsOnly?: boolean;
 }
@@ -124,9 +134,10 @@ export interface SimilarOptions extends BaseOptions {
 }
 
 /**
- * Options for the suggest() method
+ * Options for the suggest() method.
+ * Note: suggest uses a global hints endpoint and does not take a country parameter.
  */
-export interface SuggestOptions extends Omit<BaseOptions, 'lang'> {
+export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
   /** Search term (required) */
   term: string;
 }

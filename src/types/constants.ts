@@ -136,8 +136,10 @@ export type Sort = (typeof sort)[keyof typeof sort];
  * `https://itunes.apple.com/WebObjects/MZStore.woa/wa/availableStoreFronts` (may require
  * non-browser User-Agent). We use a static allowlist for security and offline use; if Apple
  * adds or changes store IDs, this object may need a code change and release.
+ *
+ * Frozen at runtime so validation (e.g. `Object.keys(markets)`) cannot desync from mutations.
  */
-export const markets: Record<string, number> = {
+export const markets: Record<string, number> = Object.freeze({
   dz: 143563,
   ao: 143564,
   ai: 143538,
@@ -285,4 +287,4 @@ export const markets: Record<string, number> = {
   vn: 143471,
   ye: 143571,
   zw: 143605,
-};
+});

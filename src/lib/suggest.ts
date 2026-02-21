@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { Suggestion } from '../types/review.js';
 import type { SuggestOptions } from '../types/options.js';
-import { doRequest } from './common.js';
+import { doRequest, ensureArray } from './common.js';
 import { suggestResponseSchema } from './schemas.js';
 
 const xmlParser = new XMLParser({
@@ -23,7 +23,7 @@ const xmlParser = new XMLParser({
 export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   const { term, requestOptions } = options;
 
-  if (!term) {
+  if (term == null || term === '') {
     throw new Error('term is required');
   }
 
@@ -52,15 +52,16 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
     return [];
   }
 
-  const dicts = arrayData.dict || [];
+  // API may return a single dict or an array of dicts; normalize to array
+  const dicts = ensureArray(arrayData.dict);
 
   const suggestions: Suggestion[] = [];
 
   for (const dict of dicts) {
-    const strings = Array.isArray(dict.string) ? dict.string : [dict.string];
-    const term = strings[0];
-    if (term) {
-      suggestions.push({ term });
+    const strings = ensureArray(dict.string);
+    const suggestionTerm = strings[0];
+    if (suggestionTerm) {
+      suggestions.push({ term: suggestionTerm });
     }
   }
 

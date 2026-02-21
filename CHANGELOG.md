@@ -7,63 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **search() device filter:** Optional `device` option (`device.IPAD`, `device.MAC`, or `device.ALL`) to filter search results by store. Passed to the iTunes Search API as `entity`. Invalid values throw `Invalid device: "..."`. Resolves CODE-REVIEW P1 (device constant was exported but no method accepted it).
+
 ### Fixed
 
-- **CI:** Added missing `@vitest/coverage-v8` devDependency so `npm run test:coverage` (and the CI coverage step) succeeds.
-- **app() screenshot scraping (PRACTICE-1):** `scrapeScreenshots()` now rethrows non-404 errors (timeout, 5xx, parse, etc.); only 404 is treated as "no screenshots" and returns empty arrays, matching ratings and similar() behavior.
-- **list() (TYPE-3):** Removed unsafe double cast and redundant `ListFeedEntryShape` in `list.ts`; list logic now uses Zod-inferred `RssFeedEntry` from `rssFeedEntrySchema` so types stay in sync with the schema.
-- **ratings() (FRAGILE-4):** When the response body is empty, throw `No ratings data returned for app ${id}` instead of `App not found (404)` so the error does not imply a 404 when the cause may be rate limiting, auth, or server error. **app()** now treats this new message as "ratings unavailable" and continues without histogram (same behavior as before for empty body).
-- **versionHistory() (FRAGILE-1):** Replaced Svelte-generated class selectors (`svelte-13339ih`) with structural selectors (`dialog[data-testid="dialog"] article`, `article > h4`, `article > p`) so the scraper does not break when Apple redeploys their frontend.
-- **similar() with includeLinkType: true:** Deduplicate by `(id, linkType)` so the same app in the same section (e.g. multiple `<a>` tags for one app) appears only once per section (CODE-REVIEW-STAGED BUG).
-- **suggest() (PRACTICE-6):** Hoist `XMLParser` to module scope as a singleton instead of instantiating on every call.
-- **App type JSDoc (TYPE-4):** Corrected reversed descriptions for `score`/`reviews` (all versions) and `currentVersionScore`/`currentVersionReviews` (current version) in `src/types/app.ts` to match `cleanApp()` in `src/lib/common.ts`.
-- **reviews() (BUG-1):** Missing or empty `im:rating` now yields `score` 0 (was parsed as 0 and clamped to 1). Both missing and unparseable ratings use 0 as the sentinel; valid numeric ratings are clamped to 0–5 (feed may send "0").
-- **`similar()` (BUG-5):** No longer swallows all HTTP errors. Only 404 (app page not found) is treated as "no similar apps" and returns `[]`; other errors (timeout, 500, rate limiting, etc.) are rethrown so callers can distinguish request failures from empty results.
-- **`app()` ratings (PRACTICE-1):** When `ratings: true`, only 404 / "App not found" from the ratings request is treated as "no histogram available"; other errors (timeout, 500, etc.) are rethrown instead of being silently swallowed.
-- **`search()` pagination (BUG-3):** Cap API `limit` at 200 (iTunes Search API maximum). When `page * num > 200`, emit a console warning and still cap the request so later pages are not silently empty.
-- **`app()`:** Remove redundant unreachable check for `id`/`appId`; `validateRequiredField` already enforces one of them (BUG-4).
-- Zod 4: replace deprecated `.passthrough()` with `z.looseObject()` for `iTunesAppResponseSchema` and `rssFeedEntrySchema`.
-- Search pagination now works correctly for page > 1 (request `page * num` results and slice client-side).
-- TypeScript: resolve `URLSearchParams` by including DOM lib in `tsconfig.json`.
-- TypeScript: add explicit types for search result callbacks (`ITunesAppResponse`) to satisfy `noImplicitAny`.
+- **doRequest retries:** Invalid `retries` values (e.g. `-1`, `NaN`) are now clamped to 0 so one request is always attempted instead of throwing a generic "Request failed" with no HTTP call. Resolves CODE-REVIEW P1 item 6.
+- **doRequest timeoutMs:** Invalid `timeoutMs` (e.g. `0`, negative, `NaN`, `Infinity`) now throws a clear error before any request instead of a cryptic `RangeError` from `AbortSignal.timeout()`. Resolves CODE-REVIEW P1 item 7.
+- **similar (TEST-4):** Added fixture-based unit tests for section heading detection and link extraction. `getLinkTypeFromHeadingText()` is now exported and tested for all `SECTION_PATTERNS` (customers-also-bought, more-by-developer, you-might-also-like, similar-apps, other); one HTML snippet test exercises cheerio parsing of headings and `/app/id` links so markup changes can be caught.
+- **screenshots (TEST-3):** Added fixture-based unit tests for `extractScreenshotUrl` and App Store screenshot HTML parsing. `screenshots.test.ts` now has a `unit (fixtures)` suite that runs in CI (no network); regression in srcset regex or cheerio selectors will be caught.
+- **RSS list feed:** `im:image` now accepts either a single image object or an array (same pattern as `link`). Avoids validation failure if the API returns a single object; `list()` normalizes to array when resolving the icon URL.
+- **ratings() histogram:** Documented assumption that bars are in 5→1 order; sanity check that histogram sum equals total count now logs a warning (no throw) when mismatch detected; parsed result is still returned. Does not detect order flip without per-row labels (see CODE-REVIEW BUG-C).
+- **list() developerId:** Parsing no longer breaks when the developer URL slug contains "id" (e.g. `identity-games`, `idle-corp`). Replaced string split on `/id` with regex `/\/id(\d+)/` so only `/id` followed by digits is matched.
 
-### Changed
+## [3.0.0] - Unreleased
 
-- **doRequest() (PRACTICE-2):** All requests now use a 30s timeout via `AbortSignal.timeout(30_000)` by default. Optional retry for transient failures: on 429, 503, or network errors, retries up to 2 times with exponential backoff (1s, 2s). Configure via `requestOptions.timeoutMs` and `requestOptions.retries` (set `retries: 0` to disable). See `RequestOptions` in `src/types/options.ts`.
-- **doRequest() (PRACTICE-3):** Error message now includes the request URL (e.g. `Request to <url> failed with status 404`) so failed requests can be identified when multiple are in flight.
-- **list.ts:** Removed redundant `RssFeedEntry` type annotation on `.map()` callback; type is inferred from schema-validated `entries`.
-- **Screenshot URL normalization (FRAGILE-3):** Preserve original image format (webp/jpg/png) instead of forcing PNG; document why 392x696 is used (2x iPhone logical size, consistent URL).
-- **Screenshot deduplication (PERF-2):** Use `Set` instead of array `.includes()` when collecting screenshot URLs in `scrapeScreenshots()` for O(1) deduplication; return type remains arrays.
-- **list() return type:** Overloaded signatures so return type narrows by `fullDetail`: `list(options & { fullDetail: true })` returns `Promise<App[]>`, and `list(options?)` with `fullDetail` false or omitted returns `Promise<ListApp[]>` (CODE-REVIEW TYPE-2).
-- **ListApp developer ID (TYPE-1, backwards compatible):** `developerId` remains `string` (empty when unknown). Added `developerIdNum: number` (0 when unknown) so code can use a single numeric field for both `ListApp` and `App`; prefer `developerIdNum` for type alignment.
-- **RequestOptions (DOC-1):** Documented `RequestOptions` in JSDoc (supported: `headers`; possible future: e.g. `signal`) and added a "Request options" note in the README. Exported `RequestOptions` from the package (`src/types/index.ts` and `src/index.ts`) so consumers can `import type { RequestOptions } from '@perttu/app-store-scraper'`.
-- **CODE-REVIEW.md:** Updated to reflect current codebase: line numbers corrected, BUG-2 / TYPE-4 / DOC-1 / PRACTICE-4 marked addressed; Bugs section notes none remaining; Action Priority table and Documentation section updated accordingly.
-- **Docs:** Documented that `privacy()` and `versionHistory()` rely on Apple’s DOM and may break; no tests for these until selectors are stabilized (FRAGILE-1, FRAGILE-2). See README (API note) and `docs/DEV-DECISIONS.md`.
-- **CI (TESTING-AND-TOOLING 2.2):** Main CI workflow now runs `npm run test:coverage` after unit tests and adds an optional `integration` job that runs `npm run test:integration` (with network). No coverage threshold; add `coverage.linesThreshold` later if needed.
-- **Default country:** Centralized as `DEFAULT_COUNTRY` in `src/types/constants.ts`; all methods that default `country` to `'us'` now use this constant. Exported from the package for consistency.
-- **Rating scores:** `0` is the documented sentinel for unknown/unavailable rating. `App.score`, `App.currentVersionScore`, and `Review.score` are 0 when the value is missing or unparseable; otherwise 1–5. Types and implementation comments updated accordingly.
-- **reviews() score:** Rating `"0"` from the feed is no longer clamped to 1; valid score range is 0–5. Sentinel 0 still used for missing/unparseable.
-- Upgraded Vitest from ^1.0.4 to 4.0.18 (dev dependency).
-- **List "light" mode:** When `list({ fullDetail: false })` (default), the list is built only from the RSS feed (one request) and returns the lighter `ListApp` shape. When `fullDetail: true`, full app details are fetched via lookup and `App[]` is returned. This matches app-store-scraper-js semantics and reduces requests when full detail is not needed.
-- **Docs:** TESTING-AND-TOOLING-RECOMMENDATIONS – updated to reflect current codebase: test layout (reviews, ratings, schemas tests; integration gating via `runIntegrationTests`), tooling (`test:coverage`, `test:integration`), recommendations marked implemented (schema tests, BUG-2 ratings histogram, reviews score parsing, similar() error propagation), sections 2.1/2.2 and priority order revised.
+**v3.0.0 release:** See [docs/BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) for upgrade guidance.
 
-### Removed
+### Documentation
 
-- **Dead schemas (PRACTICE-4):** Removed unused Zod schemas and their inferred types from `src/lib/schemas.ts`: `privacyDetailsSchema`, `privacyTypeSchema`, `ampApiResponseSchema`, `versionHistoryEntrySchema`, `versionHistoryResponseSchema`, `similarAppsSchema`, and types `AmpApiResponse`, `VersionHistoryResponse`, `SimilarApps`. Privacy, version-history, and similar modules use HTML scraping only; schema tests cover used schemas.
-
+- **README:** Node.js ≥20 requirement; Development section with commands for unit tests (`npm run test`), coverage (`npm run test:coverage`), and optional integration tests (`RUN_INTEGRATION_TESTS=1 npm run test`).
+- **Review.score:** JSDoc and `reviews.ts` document that 0 means missing or invalid (unparseable/absent); valid ratings are 1–5. Consumers should treat 0 as "no rating."
+- **README:** Country uses a static allowlist (no fallback); new Apple storefronts require a library patch.
 
 ### Added
 
-- **Unit tests for known bugs (CODE-REVIEW / TESTING-AND-TOOLING-RECOMMENDATIONS):** reviews (BUG-1) – mocked feed tests for score parsing when `im:rating` is missing or unparseable; ratings (BUG-2) – `parseRatings()` exported, histogram sliced to 5 elements, fixture HTML tests; search (BUG-3) – unit test that when `page * num > 200`, `search()` warns and requests `limit=200`.
-- **Schema validation tests:** `src/__tests__/schemas.test.ts` – fixture-based tests for `reviewsFeedSchema`, `iTunesLookupResponseSchema`, and `rssFeedSchema`; asserts `safeParse` succeeds on valid fixtures and fails on invalid ones (wrong types, missing required fields). No network required; prevents regressions when schemas change.
-- **`similar()` link type:** `similar({ ..., includeLinkType: true })` returns `SimilarApp[]` (each item has `app` and `linkType`) so you can tell which section a link came from (e.g. `customers-also-bought`, `more-by-developer`, `you-might-also-like`, `other`). Default remains `App[]` for backward compatibility.
-- `SimilarApp` and `SimilarLinkType` types.
-- `ListApp` type – lightweight app shape from list RSS (id, appId, title, icon, url, price, currency, free, description, developer, developerUrl, developerId, developerIdNum, genre, genreId, released). Returned by `list()` when `fullDetail` is false.
-- `docs/COMPARISON-WITH-APP-STORE-SCRAPER-JS.md` – comparison with facundoolano/app-store-scraper (observations and recommendations).
-- `docs/DEV-DECISIONS.md` – record of design/implementation decisions (e.g. API vs HTML scraping for privacy/version history; public iTunes Search API vs MZStore for search).
-- `docs/TESTING-AND-TOOLING-RECOMMENDATIONS.md` – pragmatic review of tests and tooling with recommendations (add/update/edit/delete, priorities, YAGNI).
-- npm script `test:coverage` (`vitest run --coverage`) for running coverage locally and in CI.
-- **Tests without network:** Tests that call live iTunes/App Store APIs are skipped by default so `npm run test` / `npm run test:run` pass in environments without network (e.g. sandbox, CI without outbound access). Run `npm run test:integration` (or set `RUN_INTEGRATION_TESTS=1`) to run the full suite including live API tests.
+- **Security/allowlists:** Runtime validation for `country`, `collection`, `category`, and `sort` against allowlists before URL interpolation. Invalid values throw clear errors (e.g. `Invalid country: "xx"`). Shared helpers in `src/lib/validate.ts`; used at the start of `list`, `search`, `app`, `ratings`, `reviews`, `similar`, `privacy`, `versionHistory`, and `developer`. README documents that only supported values are accepted.
+- **Tests:** Unit tests for `suggest()` (single vs array dict), `search()` pagination cap, validate allowlists, `list()` ListApp shape, `app()` not found; reviews/ratings/schema fixtures. Live API tests skipped by default; run `npm run test:integration` for full suite. npm script `test:coverage`.
+- **Docs:** `docs/CODEBASE-REVIEW.md`, `docs/TESTING-REVIEW.md`, `docs/COMPARISON-WITH-APP-STORE-SCRAPER-JS.md`, `docs/DEV-DECISIONS.md`, `docs/TESTING-AND-TOOLING-RECOMMENDATIONS.md`.
+- **search() overloads:** `search()` has overloaded signatures so return type narrows by `idsOnly`: `search(options & { idsOnly: true })` returns `Promise<number[]>`, otherwise `Promise<App[]`. Non-breaking.
+- **HttpError:** `doRequest()` throws `HttpError` (extends `Error`) on non-OK responses, with `status` and optional `url`. Export: `import { HttpError } from '@perttu/app-store-scraper'`.
+- **similar() link type:** `similar({ ..., includeLinkType: true })` returns `SimilarApp[]` (each item has `app` and `linkType`). New types: `SimilarApp`, `SimilarLinkType`, `ListApp` (lightweight shape from list RSS; returned by `list()` when `fullDetail` is false).
+- **resolveAppId():** Lightweight helper to resolve a bundle ID to a numeric track ID via a single iTunes lookup. Exported from the package. `similar()` and `reviews()` now use it when given `appId` instead of calling the full `app()` (which could also run screenshot scraping and ratings).
+
+### Fixed
+
+- **CI:** Added missing `@vitest/coverage-v8` so `test:coverage` succeeds; removed duplicate test run so CI runs only `test:coverage`, halving test time.
+- **app() screenshots:** Only 404 treated as "no screenshots" (empty arrays); other errors rethrown. Same pattern for **app() ratings** and **similar()**: only 404 is soft-fail; timeouts, 5xx, etc. rethrown.
+- **list():** Removed unsafe double cast and redundant `ListFeedEntryShape`; list logic uses Zod-inferred `RssFeedEntry` from `rssFeedEntrySchema` so types stay in sync with the schema.
+- **list() price:** Non-numeric `im:price` amount (e.g. `"free"`) now yields `price: 0` and `free: true` instead of `NaN` and `free: false`.
+- **ratings():** When the response is 200 but body is empty, throws `HttpError` with `status: 204` (No Content) so retry/monitoring can distinguish "no data" from "not found." `app()` treats both 404 and 204 as "ratings unavailable" and continues without histogram.
+- **versionHistory():** Structural selectors instead of Svelte-generated classes; only push entries when article has `time[datetime]` (excludes other dialogs).
+- **similar():** Only collect app links after the first recognized "similar" section heading (e.g. "Customers Also Bought", "More from Developer"); avoids breadcrumb or navigation `/app/` links as false positives. With `includeLinkType: true`, deduplicate by `(id, linkType)` so the same app appears once per section.
+- **suggest():** Single-dict response no longer dropped (normalize with `ensureArray`); schema accepts single dict or array. XMLParser hoisted to module singleton.
+- **App type JSDoc:** Corrected reversed descriptions for `score`/`reviews` (all versions) and `currentVersionScore`/`currentVersionReviews` (current version) in `src/types/app.ts` to match `cleanApp()`. **score** = all versions, **currentVersionScore** = current version; runtime behavior was always correct.
+- **reviews():** Missing or empty `im:rating` now yields `score` 0 (was clamped to 1). Missing and unparseable ratings use 0 as sentinel; valid numeric ratings clamped to 0–5.
+- **search() pagination:** Cap API `limit` at 200 (iTunes Search API maximum). When `page * num > 200`, request is capped so later pages may have fewer results or be empty. Pagination for page > 1 fixed (request and slice client-side). Test for 200-item cap now asserts `results.length === 0` when requested page is beyond cap.
+- **app():** Removed redundant unreachable check for `id`/`appId`; `validateRequiredField` already enforces one of them.
+- **cleanApp():** Use `??` for `price`, `free`, `reviews`, `currentVersionReviews` so 0 is preserved where valid.
+- **Zod 4:** `.passthrough()` → `z.looseObject()` for iTunes and RSS schemas. TypeScript: DOM lib for URLSearchParams; explicit types for search callbacks.
+- **tsconfig:** Removed unnecessary `"DOM"` from `lib`; project is Node-only (fetch typed via `@types/node`).
+- **Unit test mocks:** Replaced passthrough `doRequest` mocks in `suggest.test.ts`, `search.test.ts`, and `list.test.ts` with `vi.fn()` so tests that omit `mockResolvedValueOnce` do not hit the network. Integration tests under `RUN_INTEGRATION_TESTS` restore real `doRequest` via `vi.importActual`. **list.test.ts:** use `mockReset` (not `mockClear`) in allowlist-validation `beforeEach` to avoid cross-test leakage.
+- **reviews() page:** `page` is now validated with `validateReviewsPage()` (integer and 1–10 range); `page: 1.5` and out-of-range values throw before the request. Aligns with `search()` and `list()` pagination validation.
+- **SuggestOptions:** Type no longer includes `country`; suggest uses a global hints endpoint and does not take a country parameter, so the option was removed from the type to match behavior.
+- **ID validation:** Required `id`/`devId` checks now use `== null` instead of truthiness, so passing `0` yields a clear validation error instead of "id is required" (developer, ratings, privacy, version-history, reviews, similar).
+- **Null/undefined checks:** Standardized on `== null` for null/undefined; `ensureArray` and `reviews()` now use it. Search/suggest required `term` use `term == null || term === ''` so empty string is rejected explicitly.
+- **search() / list() pagination:** `num` and `page` are now validated so invalid values throw before calling the API. `list()`: `num` must be an integer in 1–200. `search()`: `num` and `page` must be positive integers. Aligns with `reviews()` which already validates `page` 1–10.
+- **Default value operators:** Standardized `||` vs `??`: numbers use nullish coalescing (or NaN-safe fallback) so `0` is preserved; strings use `||`; optional objects in `ratings.ts` use `??`. See `docs/CODE-REVIEW.md` §2.
+- **Type coercion:** Integer parsing standardized on `parseInt(value, 10)` with explicit `Number.isNaN()` checks (no `Number(x) || 0`). Applied to genre IDs in `common.ts` and `list.ts`, primaryGenreId, and srcset width in `app.ts`. See `docs/CODE-REVIEW.md` §5.
+
+### Changed
+
+- **404 handling:** `privacy()` and `versionHistory()` now return empty `{}` and `[]` when the app page returns 404 (app not found), matching `similar()` and the screenshot/ratings parts of `app()`. Callers no longer get different behavior for the same nonexistent app (addresses CODE-REVIEW §2).
+- **App page URL:** Extracted shared `appPageUrl(country, appId)` in `common.ts`; `app`, `similar`, `privacy`, and `versionHistory` now use it instead of duplicating the URL template (addresses CODE-REVIEW §7).
+- **CODE-REVIEW §1, §5, §8:** `cleanApp` and related defaults now use `??` instead of `||` for null/undefined-only fallbacks; `ensureArray` uses a single expression; validation order is consistent (required params first, then `validateCountry`, then other validations) in `privacy()` and `versionHistory()`.
+- **Request/doRequest():** Default timeout 30s → 15s. All requests use `AbortSignal.timeout(timeoutMs)`; retries opt-in (`retries: 0`); error message includes request URL. See `RequestOptions` (exported). See [docs/BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) §2 for error-handling migration.
+- **Error handling:** Standardized on `HttpError`; use `instanceof HttpError && err.status === 404` (or 204) instead of message parsing.
+- **Vitest:** `globals: false`; explicit imports only. Removed `console.warn` when search `page * num > 200`.
+- **Screenshots:** Preserve original format (webp/jpg/png); use `Set` for URL deduplication. **list.ts:** Redundant type annotation removed (inferred from schema).
+- **list() return type and behavior:** Overloaded signatures so return type narrows by `fullDetail`: `list(options & { fullDetail: true })` returns `Promise<App[]>`, otherwise `Promise<ListApp[]>`. When `fullDetail` is false (default), list is built only from RSS (one request); when true, full app details fetched via lookup. In v2, `fullDetail` was a no-op; v3 makes it meaningful — use `fullDetail: true` if you need full detail from `list()`. See [docs/BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) §1.
+- **Type changes (breaking):** ListApp.developerId → `number` (developerIdNum removed). App.size → `number` (bytes). Genre IDs → `number[]`/`number`. App.contentRating → `''` when unknown. See [docs/BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) §6–9.
+- **RequestOptions:** Documented and exported; README note.
+- **Docs:** CODE-REVIEW.md and TESTING-AND-TOOLING-RECOMMENDATIONS updated. `privacy()` and `versionHistory()` documented as DOM-dependent (may break). Default country: `DEFAULT_COUNTRY` constant (exported). Rating sentinel: 0 = unknown; range 0–5; `reviews()` no longer clamps feed `"0"` to 1.
+- **CI:** `npm run test:coverage` after unit tests; optional integration job. Vitest 4.0.18.
+
+### Removed
+
+- **Dead schemas:** Removed unused Zod schemas and inferred types from `src/lib/schemas.ts`: `privacyDetailsSchema`, `privacyTypeSchema`, `ampApiResponseSchema`, `versionHistoryEntrySchema`, `versionHistoryResponseSchema`, `similarAppsSchema`, and types `AmpApiResponse`, `VersionHistoryResponse`, `SimilarApps`. Privacy, version-history, and similar modules use HTML scraping only; schema tests cover used schemas.
 
 ## [2.0.1] - 2024
 
@@ -103,7 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Earlier releases (1.0.1 and before) were part of the initial TypeScript rewrite and migration from the original app-store-scraper.
 
-[Unreleased]: https://github.com/plahteenlahti/app-store-scraper/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/plahteenlahti/app-store-scraper/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/plahteenlahti/app-store-scraper/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/plahteenlahti/app-store-scraper/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/plahteenlahti/app-store-scraper/compare/v1.0.3...v2.0.0
 [1.0.3]: https://github.com/plahteenlahti/app-store-scraper/compare/v1.0.2...v1.0.3

@@ -81,6 +81,27 @@ describe('rssFeedSchema', () => {
     }
   });
 
+  it('succeeds when entry has single im:image object (not array)', () => {
+    const withSingleImage = {
+      feed: {
+        entry: [
+          {
+            id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.x' } },
+            'im:name': { label: 'App' },
+            'im:image': { label: 'https://example.com/icon.png' },
+          },
+        ],
+      },
+    };
+    const result = rssFeedSchema.safeParse(withSingleImage);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const entries = result.data.feed?.entry;
+      const arr = Array.isArray(entries) ? entries : entries ? [entries] : [];
+      expect(arr[0]?.['im:image']).toEqual({ label: 'https://example.com/icon.png' });
+    }
+  });
+
   it('fails when feed is wrong type', () => {
     const invalid = { feed: 'not-an-object' };
     const result = rssFeedSchema.safeParse(invalid);

@@ -9,6 +9,7 @@ export type {
 export type {
   RequestOptions,
   BaseOptions,
+  ResolveAppIdOptions,
   AppOptions,
   ListOptions,
   SearchOptions,

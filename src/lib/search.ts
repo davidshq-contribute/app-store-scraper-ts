@@ -1,7 +1,8 @@
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
-import { DEFAULT_COUNTRY } from '../types/constants.js';
+import { DEFAULT_COUNTRY, device as deviceConstants } from '../types/constants.js';
 import { doRequest, cleanApp, parseJson } from './common.js';
+import { validateCountry, validateSearchPagination, validateDevice } from './validate.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 
 /** iTunes Search API maximum results per request (Apple-enforced). */
@@ -15,10 +16,10 @@ const ITUNES_SEARCH_MAX_LIMIT = 200;
  * are sliced to the current page. The iTunes Search API returns at most 200
  * results per query (no offset), so only the first 200 hits are accessible.
  * Requesting a page beyond that (e.g. `page: 5` with `num: 50`) yields fewer
- * results or an empty page; a warning is emitted in that case.
+ * results or an empty page.
  *
  * @param options - Search options including term, pagination, etc.
- * @returns Promise resolving to array of apps or app IDs
+ * @returns When `idsOnly: true`, `Promise<number[]>`; otherwise `Promise<App[]>`.
  *
  * @example
  * ```typescript
@@ -39,29 +40,30 @@ const ITUNES_SEARCH_MAX_LIMIT = 200;
  * });
  * ```
  */
+export async function search(options: SearchOptions & { idsOnly: true }): Promise<number[]>;
+export async function search(options: SearchOptions & { idsOnly?: false }): Promise<App[]>;
+export async function search(options: SearchOptions): Promise<App[] | number[]>;
 export async function search(options: SearchOptions): Promise<App[] | number[]> {
-  const { term, num = 50, page = 1, country = DEFAULT_COUNTRY, lang, idsOnly, requestOptions } = options;
+  const { term, num = 50, page = 1, country = DEFAULT_COUNTRY, lang, device: deviceOption, idsOnly, requestOptions } = options;
 
-  if (!term) {
+  validateCountry(country);
+  validateSearchPagination(num, page);
+  if (deviceOption != null) validateDevice(deviceOption);
+  if (term == null || term === '') {
     throw new Error('term is required');
   }
 
   // Request enough results to cover the requested page. The iTunes Search API
   // has no offset and a hard cap of 200; we request up to that and slice client-side.
   const requestedLimit = page * num;
-  if (requestedLimit > ITUNES_SEARCH_MAX_LIMIT) {
-    console.warn(
-      `search(): page * num (${requestedLimit}) exceeds iTunes Search API limit (${ITUNES_SEARCH_MAX_LIMIT}). ` +
-        `You may get fewer than ${num} results or an empty page.`
-    );
-  }
   const limit = Math.min(requestedLimit, ITUNES_SEARCH_MAX_LIMIT);
 
+  const entity = deviceOption ?? deviceConstants.ALL;
   const params = new URLSearchParams({
     term,
     country,
     media: 'software',
-    entity: 'software',
+    entity,
     limit: String(limit)
   });
 
@@ -85,7 +87,10 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const response = validationResult.data;
 
   // iTunes Search API has no offset; we requested limit (capped at 200) and slice here.
-  const allResults = response.results.filter((app: ITunesAppResponse) => app.kind === 'software');
+  // Filter to software only; align with lookup() so we keep items with kind or wrapperType === 'software'.
+  const allResults = response.results.filter(
+    (app) => app.kind === 'software' || app.wrapperType === 'software'
+  );
 
   // Apply pagination
   const start = (page - 1) * num;
@@ -95,7 +100,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   if (idsOnly) {
     return paginatedResults
       .map((result: ITunesAppResponse) => result.trackId)
-      .filter((id: number | undefined): id is number => id !== undefined);
+      .filter((id): id is number => id !== undefined);
   }
 
   // Convert to App objects

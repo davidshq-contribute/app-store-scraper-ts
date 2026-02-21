@@ -45,7 +45,7 @@ async function testAllMethods() {
     console.log(`   Bundle ID: ${appData.appId}`);
     console.log(`   Rating: ${appData.score}/5 (${appData.reviews} reviews)`);
     console.log(`   Price: ${appData.free ? 'Free' : `$${appData.price}`}`);
-    console.log(`   Size: ${(parseInt(appData.size) / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`   Size: ${(appData.size / 1024 / 1024).toFixed(2)} MB`);
     console.log(`   Languages: ${appData.languages.length}`);
     console.log(`   Version: ${appData.version}`);
 

@@ -25,13 +25,16 @@ describe('reviews', () => {
     );
   });
 
-  it('throws when page is out of range', async () => {
-    await expect(
-      reviews({ id: 123, page: 0 })
-    ).rejects.toThrow('Page must be between 1 and 10');
-    await expect(
-      reviews({ id: 123, page: 11 })
-    ).rejects.toThrow('Page must be between 1 and 10');
+  it('throws when page is out of range or non-integer', async () => {
+    await expect(reviews({ id: 123, page: 0 })).rejects.toThrow(
+      'page must be an integer between 1 and 10'
+    );
+    await expect(reviews({ id: 123, page: 11 })).rejects.toThrow(
+      'page must be an integer between 1 and 10'
+    );
+    await expect(reviews({ id: 123, page: 1.5 })).rejects.toThrow(
+      'page must be an integer between 1 and 10'
+    );
   });
 
   describe('score parsing (BUG-1)', () => {
@@ -110,6 +113,48 @@ describe('reviews', () => {
         expect(r.score).toBeLessThanOrEqual(5);
         expect(Number.isNaN(r.score)).toBe(false);
       }
+    });
+  });
+
+  /** Asserts mapping from feed entry to Review (userName, title, text, id, version, updated, userUrl). */
+  describe('field mapping', () => {
+    /** Feed with one review whose fields are set to distinct values to assert mapping. */
+    const feedWithFullReview = {
+      feed: {
+        entry: [
+          { id: { label: 'app-meta' }, title: { label: 'App' } },
+          {
+            id: { label: 'review-id-12345' },
+            author: {
+              name: { label: 'Jane Doe' },
+              uri: { label: 'https://apps.apple.com/user/123' },
+            },
+            'im:version': { label: '2.1.0' },
+            'im:rating': { label: '4' },
+            title: { label: 'Great app' },
+            content: { label: 'Really enjoying this so far.' },
+            updated: { label: '2025-02-15T12:00:00-07:00' },
+          },
+        ],
+      },
+    };
+
+    it('maps id, userName, userUrl, version, title, text, updated from feed entry', async () => {
+      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(feedWithFullReview));
+
+      const result = await reviews({ id: 553834731, page: 1 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'review-id-12345',
+        userName: 'Jane Doe',
+        userUrl: 'https://apps.apple.com/user/123',
+        version: '2.1.0',
+        score: 4,
+        title: 'Great app',
+        text: 'Really enjoying this so far.',
+        updated: '2025-02-15T12:00:00-07:00',
+      });
     });
   });
 });
