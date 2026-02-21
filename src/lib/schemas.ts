@@ -6,7 +6,7 @@ import { z } from 'zod';
 /**
  * iTunes API app response schema
  */
-export const iTunesAppResponseSchema = z.object({
+export const iTunesAppResponseSchema = z.looseObject({
   wrapperType: z.string().optional(),
   kind: z.string().optional(),
   trackId: z.number().optional(),
@@ -42,7 +42,7 @@ export const iTunesAppResponseSchema = z.object({
   ipadScreenshotUrls: z.array(z.string()).optional(),
   appletvScreenshotUrls: z.array(z.string()).optional(),
   supportedDevices: z.array(z.string()).optional(),
-}).passthrough();
+});
 
 export type ITunesAppResponse = z.infer<typeof iTunesAppResponseSchema>;
 
@@ -57,19 +57,70 @@ export const iTunesLookupResponseSchema = z.object({
 export type ITunesLookupResponse = z.infer<typeof iTunesLookupResponseSchema>;
 
 /**
- * RSS feed entry schema for lists
+ * RSS feed entry schema for lists (minimal for validation).
+ * Full list feed entries also include im:name, im:image, link, im:price, summary,
+ * im:artist, category, im:releaseDate; we parse these in list.ts when fullDetail is false.
  */
-export const rssFeedEntrySchema = z.object({
+export const rssFeedEntrySchema = z.looseObject({
   id: z
     .object({
       attributes: z
         .object({
           'im:id': z.string().optional(),
+          'im:bundleId': z.string().optional(),
         })
         .optional(),
     })
     .optional(),
+  'im:name': z.object({ label: z.string().optional() }).optional(),
+  'im:image': z.array(z.object({ label: z.string().optional() })).optional(),
+  link: z
+    .union([
+      z.object({
+        attributes: z
+          .object({ href: z.string().optional(), rel: z.string().optional() })
+          .optional(),
+      }),
+      z.array(
+        z.object({
+          attributes: z
+            .object({ href: z.string().optional(), rel: z.string().optional() })
+            .optional(),
+        })
+      ),
+    ])
+    .optional(),
+  'im:price': z
+    .object({
+      attributes: z
+        .object({
+          amount: z.union([z.string(), z.number()]).optional(),
+          currency: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  summary: z.object({ label: z.string().optional() }).optional(),
+  'im:artist': z
+    .object({
+      label: z.string().optional(),
+      attributes: z.object({ href: z.string().optional() }).optional(),
+    })
+    .optional(),
+  category: z
+    .object({
+      attributes: z
+        .object({
+          label: z.string().optional(),
+          'im:id': z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  'im:releaseDate': z.object({ label: z.string().optional() }).optional(),
 });
+
+export type RssFeedEntry = z.infer<typeof rssFeedEntrySchema>;
 
 /** RSS feed schema; entry may be a single object or array depending on response. */
 export const rssFeedSchema = z.object({

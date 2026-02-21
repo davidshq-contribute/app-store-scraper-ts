@@ -101,7 +101,8 @@ async function testAllMethods() {
     });
     console.log(`   ✅ Top ${topGames.length} free games:`);
     topGames.slice(0, 3).forEach((game, i) => {
-      console.log(`      ${i + 1}. ${game.title} (${game.score}/5)`);
+      // list() returns ListApp by default (no .score); use fullDetail: true for full App
+      console.log(`      ${i + 1}. ${game.title}`);
     });
 
     // 4. developer() - Get all apps from a developer

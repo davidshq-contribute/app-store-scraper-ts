@@ -1,4 +1,41 @@
 /**
+ * Lightweight app shape returned by `list()` when `fullDetail: false`.
+ * Built only from the RSS feed (no lookup), so fewer fields and fewer requests.
+ */
+export interface ListApp {
+  /** Track ID (numeric identifier) */
+  id: number;
+  /** Bundle identifier (e.g., com.example.app) */
+  appId: string;
+  /** App name/title */
+  title: string;
+  /** App icon URL */
+  icon: string;
+  /** iTunes store URL */
+  url: string;
+  /** Price in local currency */
+  price: number;
+  /** Currency code (e.g., "USD", "EUR") */
+  currency: string;
+  /** Whether the app is free */
+  free: boolean;
+  /** Short description from the feed */
+  description: string;
+  /** Developer name */
+  developer: string;
+  /** Developer iTunes URL */
+  developerUrl: string;
+  /** Developer ID (from feed; string when parsed from URL) */
+  developerId: string;
+  /** Primary genre name */
+  genre: string;
+  /** Primary genre ID */
+  genreId: string;
+  /** Initial release date */
+  released: string;
+}
+
+/**
  * Represents a complete app from the iTunes/Mac App Store
  */
 export interface App {

@@ -31,7 +31,7 @@ const appData = await app({ id: 553834731 });
 // Search for apps
 const results = await search({ term: 'minecraft', num: 10 });
 
-// Get top free games
+// Get top free games (light shape by default; use fullDetail: true for full app details)
 const games = await list({
   collection: collection.TOP_FREE_IOS,
   category: category.GAMES,
@@ -49,7 +49,7 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 ### Methods
 
 - `app()` - Get detailed app information
-- `list()` - Get curated app lists from collections
+- `list()` - Get curated app lists (returns light `ListApp[]` by default; `fullDetail: true` for full `App[]`)
 - `search()` - Search for apps by keyword
 - `developer()` - Get all apps from a developer
 - `reviews()` - Get user reviews for an app

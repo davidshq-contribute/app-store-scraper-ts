@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded Vitest from ^1.0.4 to 4.0.18 (dev dependency).
+- **List “light” mode:** When `list({ fullDetail: false })` (default), the list is built only from the RSS feed (one request) and returns the lighter `ListApp` shape. When `fullDetail: true`, full app details are fetched via lookup and `App[]` is returned. This matches app-store-scraper-js semantics and reduces requests when full detail is not needed.
+
+### Added
+
+- `ListApp` type – lightweight app shape from list RSS (id, appId, title, icon, url, price, currency, free, description, developer, developerUrl, developerId, genre, genreId, released). Returned by `list()` when `fullDetail` is false.
+- `docs/COMPARISON-WITH-APP-STORE-SCRAPER-JS.md` – comparison with facundoolano/app-store-scraper (observations and recommendations).
+
 ### Fixed
 
+- Zod 4: replace deprecated `.passthrough()` with `z.looseObject()` for `iTunesAppResponseSchema` and `rssFeedEntrySchema`.
 - Search pagination now works correctly for page > 1 (request `page * num` results and slice client-side).
 - TypeScript: resolve `URLSearchParams` by including DOM lib in `tsconfig.json`.
 - TypeScript: add explicit types for search result callbacks (`ITunesAppResponse`) to satisfy `noImplicitAny`.

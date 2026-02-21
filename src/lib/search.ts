@@ -1,6 +1,6 @@
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
-import { doRequest, cleanApp } from './common.js';
+import { doRequest, cleanApp, parseJson } from './common.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 
 /**
@@ -60,7 +60,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const body = await doRequest(url, requestOptions);
 
   // Parse and validate response with Zod
-  const parsedData: unknown = JSON.parse(body);
+  const parsedData = parseJson(body);
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {

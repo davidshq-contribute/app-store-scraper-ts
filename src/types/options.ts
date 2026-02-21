@@ -38,7 +38,10 @@ export interface ListOptions extends BaseOptions {
   category?: Category;
   /** Number of results (default: 50, max: 200) */
   num?: number;
-  /** Whether to fetch full details for each app */
+  /**
+   * If false (default), returns a light shape ({@link ListApp}) from the RSS feed only (one request).
+   * If true, fetches full details via lookup and returns {@link App[]}.
+   */
   fullDetail?: boolean;
 }
 

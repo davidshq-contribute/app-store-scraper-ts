@@ -1,7 +1,36 @@
 import { describe, it, expect } from 'vitest';
-import { storeId, ensureArray, validateRequiredField } from '../lib/common.js';
+import {
+  storeId,
+  ensureArray,
+  validateRequiredField,
+  parseJson,
+} from '../lib/common.js';
 
 describe('common utilities', () => {
+  describe('parseJson', () => {
+    it('parses valid JSON and returns unknown', () => {
+      expect(parseJson('{"a":1}')).toEqual({ a: 1 });
+      expect(parseJson('null')).toBeNull();
+      expect(parseJson('[1,2]')).toEqual([1, 2]);
+    });
+
+    it('throws clear error on invalid JSON with body preview', () => {
+      const body = 'not json at all';
+      expect(() => parseJson(body)).toThrow('Invalid JSON response');
+      expect(() => parseJson(body)).toThrow('Body preview:');
+      expect(() => parseJson(body)).toThrow(body);
+    });
+
+    it('includes optional status in error when provided', () => {
+      expect(() => parseJson('x', { status: 500 })).toThrow('status 500');
+    });
+
+    it('truncates long body in preview to 200 chars', () => {
+      const long = 'x'.repeat(300);
+      expect(() => parseJson(long)).toThrow('x'.repeat(200) + '...');
+    });
+  });
+
   describe('storeId', () => {
     it('should return store ID for valid country code', () => {
       expect(storeId('us')).toBe(143441);

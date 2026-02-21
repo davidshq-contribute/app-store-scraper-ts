@@ -1,7 +1,7 @@
 import type { Review } from '../types/review.js';
 import type { ReviewsOptions } from '../types/options.js';
 import { sort as sortConstants } from '../types/constants.js';
-import { doRequest, validateRequiredField, ensureArray } from './common.js';
+import { doRequest, validateRequiredField, ensureArray, parseJson } from './common.js';
 import { app } from './app.js';
 import { reviewsFeedSchema } from './schemas.js';
 
@@ -55,7 +55,7 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   const body = await doRequest(url, requestOptions);
 
   // Parse and validate response with Zod
-  const parsedData = JSON.parse(body) as unknown;
+  const parsedData = parseJson(body);
   const validationResult = reviewsFeedSchema.safeParse(parsedData);
 
   if (!validationResult.success) {

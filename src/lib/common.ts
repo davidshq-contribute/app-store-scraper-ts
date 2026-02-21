@@ -32,6 +32,33 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
 }
 
 /**
+ * Parses a string as JSON and returns the result as unknown.
+ * On parse failure, throws a clear error including optional status and a short body preview for debugging.
+ *
+ * @param body - Raw response body string
+ * @param context - Optional context (e.g. response status) for error messages
+ * @returns Parsed value as unknown
+ * @throws Error with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
+ */
+export function parseJson(
+  body: string,
+  context?: { status?: number }
+): unknown {
+  try {
+    return JSON.parse(body) as unknown;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const statusPart =
+      context?.status != null ? ` (status ${context.status})` : '';
+    const bodyPreview =
+      body.length > 200 ? `${body.slice(0, 200)}...` : body;
+    throw new Error(
+      `Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`
+    );
+  }
+}
+
+/**
  * Cleans and transforms an iTunes API response to our App format
  */
 export function cleanApp(app: ITunesAppResponse): App {
@@ -106,7 +133,7 @@ export async function lookup(
   const url = `https://itunes.apple.com/lookup?${params.toString()}`;
   const body = await doRequest(url, requestOptions);
 
-  const parsedData: unknown = JSON.parse(body);
+  const parsedData = parseJson(body);
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
