@@ -1,12 +1,17 @@
 import * as cheerio from 'cheerio';
 import type { PrivacyDetails, PrivacyType } from '../types/review.js';
 import type { PrivacyOptions } from '../types/options.js';
-import { doRequest } from './common.js';
+import { DEFAULT_COUNTRY } from '../types/constants.js';
+import { appPageUrl, doRequest } from './common.js';
+import { validateCountry } from './validate.js';
+import { HttpError } from './errors.js';
 
 /**
- * Retrieves privacy policy details for an app
+ * Retrieves privacy policy details for an app.
+ * If the app page returns 404 (app not found), returns an empty object instead of throwing.
+ *
  * @param options - Options including app id
- * @returns Promise resolving to privacy details
+ * @returns Promise resolving to privacy details (empty object if app not found)
  *
  * @example
  * ```typescript
@@ -14,15 +19,24 @@ import { doRequest } from './common.js';
  * ```
  */
 export async function privacy(options: PrivacyOptions): Promise<PrivacyDetails> {
-  const { id, country = 'us', requestOptions } = options;
+  const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
-  if (!id) {
+  if (id == null) {
     throw new Error('id is required');
   }
+  validateCountry(country);
 
-  // Fetch the app page which contains privacy info in the HTML
-  const appPageUrl = `https://apps.apple.com/${country}/app/id${id}`;
-  const appPageBody = await doRequest(appPageUrl, requestOptions);
+  const url = appPageUrl(country, id);
+  let appPageBody: string;
+  try {
+    appPageBody = await doRequest(url, requestOptions);
+  } catch (error) {
+    // 404 = app page not found; return empty details (consistent with similar(), app() screenshots/ratings).
+    if (error instanceof HttpError && error.status === 404) {
+      return {};
+    }
+    throw error;
+  }
 
   // Parse the HTML
   const $ = cheerio.load(appPageBody);

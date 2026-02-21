@@ -1,4 +1,4 @@
-export type { App, RatingHistogram, Ratings } from './app.js';
+export type { App, ListApp, RatingHistogram, Ratings, SimilarApp, SimilarLinkType } from './app.js';
 export type {
   Review,
   VersionHistory,
@@ -7,7 +7,9 @@ export type {
   PrivacyType,
 } from './review.js';
 export type {
+  RequestOptions,
   BaseOptions,
+  ResolveAppIdOptions,
   AppOptions,
   ListOptions,
   SearchOptions,
@@ -20,4 +22,4 @@ export type {
   VersionHistoryOptions,
 } from './options.js';
 export type { Collection, Category, Device, Sort } from './constants.js';
-export { collection, category, device, sort, markets } from './constants.js';
+export { collection, category, device, sort, markets, DEFAULT_COUNTRY } from './constants.js';

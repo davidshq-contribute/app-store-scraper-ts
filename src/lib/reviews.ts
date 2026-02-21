@@ -1,8 +1,8 @@
 import type { Review } from '../types/review.js';
 import type { ReviewsOptions } from '../types/options.js';
-import { sort as sortConstants } from '../types/constants.js';
-import { doRequest, validateRequiredField, ensureArray } from './common.js';
-import { app } from './app.js';
+import { DEFAULT_COUNTRY, sort as sortConstants } from '../types/constants.js';
+import { doRequest, validateRequiredField, ensureArray, parseJson, resolveAppId } from './common.js';
+import { validateCountry, validateSort, validateReviewsPage } from './validate.js';
 import { reviewsFeedSchema } from './schemas.js';
 
 /**
@@ -32,21 +32,19 @@ import { reviewsFeedSchema } from './schemas.js';
 export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
 
-  const { appId, page = 1, sort = sortConstants.RECENT, country = 'us', requestOptions } = options;
+  const { appId, page = 1, sort = sortConstants.RECENT, country = DEFAULT_COUNTRY, requestOptions } = options;
   let { id } = options;
 
-  // Validate page range
-  if (page < 1 || page > 10) {
-    throw new Error('Page must be between 1 and 10');
+  validateCountry(country);
+  validateSort(sort);
+  validateReviewsPage(page);
+
+  // If appId is provided, resolve to id first (lightweight lookup only)
+  if (appId != null && id == null) {
+    id = await resolveAppId({ appId, country, requestOptions });
   }
 
-  // If appId is provided, resolve to id first
-  if (appId && !id) {
-    const appData = await app({ appId, country, requestOptions });
-    id = appData.id;
-  }
-
-  if (!id) {
+  if (id == null) {
     throw new Error('Could not resolve app id');
   }
 
@@ -55,7 +53,7 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   const body = await doRequest(url, requestOptions);
 
   // Parse and validate response with Zod
-  const parsedData = JSON.parse(body) as unknown;
+  const parsedData = parseJson(body);
   const validationResult = reviewsFeedSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
@@ -72,14 +70,22 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   // Skip the first entry as it's typically app metadata
   const reviewEntries = entries.slice(1);
 
-  return reviewEntries.map((entry) => ({
-    id: entry.id?.label || '',
-    userName: entry.author?.name?.label || '',
-    userUrl: entry.author?.uri?.label || '',
-    version: entry['im:version']?.label || '',
-    score: parseInt(entry['im:rating']?.label || '0', 10),
-    title: entry.title?.label || '',
-    text: entry.content?.label || '',
-    updated: entry.updated?.label || '',
-  }));
+  return reviewEntries.map((entry) => {
+    const label = entry['im:rating']?.label;
+    const rawScore =
+      label === undefined || label === '' ? NaN : parseInt(label, 10);
+    // 0 = missing/invalid (see Review.score JSDoc); valid ratings 1–5, clamped to 0–5
+    const score =
+      Number.isNaN(rawScore) ? 0 : Math.max(0, Math.min(5, rawScore));
+    return {
+      id: entry.id?.label ?? '',
+      userName: entry.author?.name?.label ?? '',
+      userUrl: entry.author?.uri?.label ?? '',
+      version: entry['im:version']?.label ?? '',
+      score,
+      title: entry.title?.label ?? '',
+      text: entry.content?.label ?? '',
+      updated: entry.updated?.label ?? '',
+    };
+  });
 }

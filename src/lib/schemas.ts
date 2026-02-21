@@ -6,7 +6,7 @@ import { z } from 'zod';
 /**
  * iTunes API app response schema
  */
-export const iTunesAppResponseSchema = z.object({
+export const iTunesAppResponseSchema = z.looseObject({
   wrapperType: z.string().optional(),
   kind: z.string().optional(),
   trackId: z.number().optional(),
@@ -17,9 +17,9 @@ export const iTunesAppResponseSchema = z.object({
   artworkUrl512: z.string().optional(),
   artworkUrl100: z.string().optional(),
   genres: z.array(z.string()).optional(),
-  genreIds: z.array(z.string()).optional(),
+  genreIds: z.array(z.coerce.number()).optional(),
   primaryGenreName: z.string().optional(),
-  primaryGenreId: z.number().optional(),
+  primaryGenreId: z.coerce.number().optional(),
   contentAdvisoryRating: z.string().optional(),
   languageCodesISO2A: z.array(z.string()).optional(),
   fileSizeBytes: z.string().optional(),
@@ -42,7 +42,7 @@ export const iTunesAppResponseSchema = z.object({
   ipadScreenshotUrls: z.array(z.string()).optional(),
   appletvScreenshotUrls: z.array(z.string()).optional(),
   supportedDevices: z.array(z.string()).optional(),
-}).passthrough();
+});
 
 export type ITunesAppResponse = z.infer<typeof iTunesAppResponseSchema>;
 
@@ -57,29 +57,88 @@ export const iTunesLookupResponseSchema = z.object({
 export type ITunesLookupResponse = z.infer<typeof iTunesLookupResponseSchema>;
 
 /**
- * RSS feed entry schema for lists
+ * RSS feed entry schema for lists (minimal for validation).
+ * Full list feed entries also include im:name, im:image, link, im:price, summary,
+ * im:artist, category, im:releaseDate; we parse these in list.ts when fullDetail is false.
  */
-export const rssFeedEntrySchema = z.object({
+export const rssFeedEntrySchema = z.looseObject({
   id: z
     .object({
       attributes: z
         .object({
           'im:id': z.string().optional(),
+          'im:bundleId': z.string().optional(),
         })
+        .optional(),
+    })
+    .optional(),
+  'im:name': z.object({ label: z.string().optional() }).optional(),
+  'im:image': z
+    .union([
+      z.object({ label: z.string().optional() }),
+      z.array(z.object({ label: z.string().optional() })),
+    ])
+    .optional(),
+  link: z
+    .union([
+      z.object({
+        attributes: z
+          .object({ href: z.string().optional(), rel: z.string().optional() })
+          .optional(),
+      }),
+      z.array(
+        z.object({
+          attributes: z
+            .object({ href: z.string().optional(), rel: z.string().optional() })
+            .optional(),
+        })
+      ),
+    ])
+    .optional(),
+  'im:price': z
+    .object({
+      attributes: z
+        .object({
+          amount: z.union([z.string(), z.number()]).optional(),
+          currency: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  summary: z.object({ label: z.string().optional() }).optional(),
+  'im:artist': z
+    .object({
+      label: z.string().optional(),
+      attributes: z.object({ href: z.string().optional() }).optional(),
+    })
+    .optional(),
+  category: z
+    .object({
+      attributes: z
+        .object({
+          label: z.string().optional(),
+          'im:id': z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  'im:releaseDate': z.object({ label: z.string().optional() }).optional(),
+});
+
+export type RssFeedEntry = z.infer<typeof rssFeedEntrySchema>;
+
+/** RSS feed schema; entry may be a single object or array depending on response. */
+export const rssFeedSchema = z.object({
+  feed: z
+    .object({
+      entry: z
+        .union([rssFeedEntrySchema, z.array(rssFeedEntrySchema)])
         .optional(),
     })
     .optional(),
 });
 
-export const rssFeedSchema = z.object({
-  feed: z
-    .object({
-      entry: z.array(rssFeedEntrySchema).optional(),
-    })
-    .optional(),
-});
-
-export type RSSFeed = z.infer<typeof rssFeedSchema>;
+export type RssFeed = z.infer<typeof rssFeedSchema>;
 
 /**
  * Review entry schema
@@ -158,7 +217,9 @@ export const suggestResponseSchema = z.object({
             .union([
               z.string(),
               z.object({
-                dict: z.array(suggestDictSchema).optional(),
+                dict: z
+                  .union([suggestDictSchema, z.array(suggestDictSchema)])
+                  .optional(),
               }),
             ])
             .optional(),
@@ -169,77 +230,3 @@ export const suggestResponseSchema = z.object({
 });
 
 export type SuggestResponse = z.infer<typeof suggestResponseSchema>;
-
-/**
- * Privacy details schema
- */
-export const privacyTypeSchema = z.object({
-  privacyType: z.string().optional(),
-  identifier: z.string().optional(),
-  description: z.string().optional(),
-  dataCategories: z.array(z.string()).optional(),
-  purposes: z.array(z.string()).optional(),
-});
-
-export const privacyDetailsSchema = z.object({
-  managePrivacyChoicesUrl: z.string().optional(),
-  privacyPolicyUrl: z.string().optional(),
-  privacyPolicyText: z.string().optional(),
-  privacyTypes: z.array(privacyTypeSchema).optional(),
-});
-
-export const ampApiResponseSchema = z.object({
-  data: z
-    .array(
-      z.object({
-        attributes: z
-          .object({
-            privacyDetails: privacyDetailsSchema.optional(),
-          })
-          .optional(),
-      })
-    )
-    .optional(),
-});
-
-export type AmpApiResponse = z.infer<typeof ampApiResponseSchema>;
-
-/**
- * Version history schema
- */
-export const versionHistoryEntrySchema = z.object({
-  versionDisplay: z.string().optional(),
-  releaseDate: z.string().optional(),
-  releaseNotes: z.string().optional(),
-});
-
-export const versionHistoryResponseSchema = z.object({
-  data: z
-    .array(
-      z.object({
-        attributes: z
-          .object({
-            platformAttributes: z
-              .object({
-                ios: z
-                  .object({
-                    versionHistory: z.array(versionHistoryEntrySchema).optional(),
-                  })
-                  .optional(),
-              })
-              .optional(),
-          })
-          .optional(),
-      })
-    )
-    .optional(),
-});
-
-export type VersionHistoryResponse = z.infer<typeof versionHistoryResponseSchema>;
-
-/**
- * Similar apps response schema (array of app IDs)
- */
-export const similarAppsSchema = z.array(z.number());
-
-export type SimilarApps = z.infer<typeof similarAppsSchema>;

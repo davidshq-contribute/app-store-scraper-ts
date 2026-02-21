@@ -1,19 +1,41 @@
-import type { Collection, Category, Sort } from './constants.js';
+import type { Collection, Category, Device, Sort } from './constants.js';
 
+/**
+ * Options passed through to the underlying `fetch()` for HTTP requests.
+ *
+ * **Supported:**
+ * - `headers` – Custom headers merged over the default User-Agent, Accept, and Accept-Language.
+ * - `timeoutMs` – Request timeout in milliseconds (default: 15000). Must be a positive finite number. Uses `AbortSignal.timeout()`.
+ * - `retries` – Number of retries for transient failures (default: 0, opt-in). Retries on 429, 503,
+ *   network errors, and timeout (AbortError), with exponential backoff. Set to a positive value (e.g. 2) to enable.
+ */
 export interface RequestOptions {
+  /** Custom request headers (merged with defaults). */
   headers?: Record<string, string>;
+  /** Request timeout in milliseconds. Must be positive and finite. Default 15000. */
+  timeoutMs?: number;
+  /** Number of retries for transient failures (429, 503, network, timeout). Default 0 (opt-in). Set e.g. 2 to enable. */
+  retries?: number;
 }
 
 /**
  * Common options for requests
  */
 export interface BaseOptions {
-  /** Two-letter country code (default: "us") */
+  /** Two-letter country code (default: {@link DEFAULT_COUNTRY}) */
   country?: string;
   /** Language code (e.g., "en-us") */
   lang?: string;
   /** Custom request options */
   requestOptions?: RequestOptions;
+}
+
+/**
+ * Options for resolving a bundle ID to a numeric track ID
+ */
+export interface ResolveAppIdOptions extends BaseOptions {
+  /** Bundle ID (e.g., com.example.app) */
+  appId: string;
 }
 
 /**
@@ -38,20 +60,29 @@ export interface ListOptions extends BaseOptions {
   category?: Category;
   /** Number of results (default: 50, max: 200) */
   num?: number;
-  /** Whether to fetch full details for each app */
+  /**
+   * If false (default), returns a light shape ({@link ListApp}) from the RSS feed only (one request).
+   * If true, fetches full details via lookup and returns {@link App[]}.
+   */
   fullDetail?: boolean;
 }
 
 /**
- * Options for the search() method
+ * Options for the search() method.
+ *
+ * Pagination note: the iTunes Search API returns at most 200 results per query
+ * (no offset). So with `num` results per page, only pages 1 through
+ * ceil(200 / num) can return data; higher pages may be empty or partial.
  */
 export interface SearchOptions extends BaseOptions {
   /** Search term (required) */
   term: string;
   /** Number of results per page (default: 50) */
   num?: number;
-  /** Page number (default: 1) */
+  /** Page number (default: 1). Effective range is limited by the API's 200-result cap. */
   page?: number;
+  /** Device / store filter: iPad apps, Mac apps, or all (default: all). Use {@link device} constants. */
+  device?: Device;
   /** Return only app IDs */
   idsOnly?: boolean;
 }
@@ -94,12 +125,19 @@ export interface SimilarOptions extends BaseOptions {
   id?: number;
   /** Bundle ID */
   appId?: string;
+  /**
+   * If true, return `SimilarApp[]` (each item has `app` and `linkType`).
+   * If false or omitted, return `App[]` (backward compatible).
+   * @default false
+   */
+  includeLinkType?: boolean;
 }
 
 /**
- * Options for the suggest() method
+ * Options for the suggest() method.
+ * Note: suggest uses a global hints endpoint and does not take a country parameter.
  */
-export interface SuggestOptions extends Omit<BaseOptions, 'lang'> {
+export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
   /** Search term (required) */
   term: string;
 }

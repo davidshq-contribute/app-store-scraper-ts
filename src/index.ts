@@ -5,6 +5,7 @@
 
 // Export all API methods
 export { app } from './lib/app.js';
+export { resolveAppId } from './lib/common.js';
 export { list } from './lib/list.js';
 export { search } from './lib/search.js';
 export { developer } from './lib/developer.js';
@@ -14,18 +15,24 @@ export { similar } from './lib/similar.js';
 export { suggest } from './lib/suggest.js';
 export { privacy } from './lib/privacy.js';
 export { versionHistory } from './lib/version-history.js';
+export { HttpError } from './lib/errors.js';
 
 // Export types
 export type {
   App,
+  ListApp,
   RatingHistogram,
   Ratings,
+  SimilarApp,
+  SimilarLinkType,
   Review,
   VersionHistory,
   Suggestion,
   PrivacyDetails,
   PrivacyType,
+  RequestOptions,
   BaseOptions,
+  ResolveAppIdOptions,
   AppOptions,
   ListOptions,
   SearchOptions,
@@ -43,4 +50,4 @@ export type {
 } from './types/index.js';
 
 // Export constants
-export { collection, category, device, sort, markets } from './types/index.js';
+export { collection, category, device, sort, markets, DEFAULT_COUNTRY } from './types/index.js';

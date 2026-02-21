@@ -10,7 +10,10 @@ export interface Review {
   userUrl: string;
   /** App version this review is for */
   version: string;
-  /** Star rating (1-5) */
+  /**
+   * Star rating. Valid values are 1–5. Use 0 to mean missing or invalid (unparseable
+   * or absent in the feed); treat 0 as "no rating" in consumers.
+   */
   score: number;
   /** Review title/headline */
   title: string;

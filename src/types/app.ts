@@ -1,4 +1,41 @@
 /**
+ * Lightweight app shape returned by `list()` when `fullDetail: false`.
+ * Built only from the RSS feed (no lookup), so fewer fields and fewer requests.
+ */
+export interface ListApp {
+  /** Track ID (numeric identifier) */
+  id: number;
+  /** Bundle identifier (e.g., com.example.app) */
+  appId: string;
+  /** App name/title */
+  title: string;
+  /** App icon URL */
+  icon: string;
+  /** iTunes store URL */
+  url: string;
+  /** Price in local currency */
+  price: number;
+  /** Currency code (e.g., "USD", "EUR") */
+  currency: string;
+  /** Whether the app is free */
+  free: boolean;
+  /** Short description from the feed */
+  description: string;
+  /** Developer name */
+  developer: string;
+  /** Developer iTunes URL */
+  developerUrl: string;
+  /** Developer ID (numeric; 0 when unknown). Matches {@link App}.developerId. */
+  developerId: number;
+  /** Primary genre name */
+  genre: string;
+  /** Primary genre ID (numeric; 0 when unknown). Matches {@link App}.primaryGenreId. */
+  genreId: number;
+  /** Initial release date */
+  released: string;
+}
+
+/**
  * Represents a complete app from the iTunes/Mac App Store
  */
 export interface App {
@@ -16,18 +53,18 @@ export interface App {
   icon: string;
   /** Array of genre names */
   genres: string[];
-  /** Array of genre IDs */
-  genreIds: string[];
+  /** Array of genre IDs (numeric) */
+  genreIds: number[];
   /** Primary genre name */
   primaryGenre: string;
-  /** Primary genre ID */
-  primaryGenreId: string;
-  /** Content rating (e.g., "4+", "12+", "17+") */
+  /** Primary genre ID (numeric; 0 when unknown). Aligns with {@link category} constants. */
+  primaryGenreId: number;
+  /** Content rating (e.g., "4+", "12+", "17+"); empty string when unknown. */
   contentRating: string;
   /** Supported languages (array of language codes) */
   languages: string[];
   /** File size in bytes */
-  size: string;
+  size: number;
   /** Required iOS/macOS version */
   requiredOsVersion: string;
   /** Initial release date */
@@ -52,13 +89,19 @@ export interface App {
   developerUrl: string;
   /** Developer website URL (if available) */
   developerWebsite?: string;
-  /** Average user rating (current version) */
+  /**
+   * Average user rating (all versions).
+   * Use 0 as sentinel for unknown/unavailable; otherwise 1–5.
+   */
   score: number;
-  /** Total number of ratings (current version) */
-  reviews: number;
-  /** Average user rating (all versions) */
-  currentVersionScore: number;
   /** Total number of ratings (all versions) */
+  reviews: number;
+  /**
+   * Average user rating (current version).
+   * Use 0 as sentinel for unknown/unavailable; otherwise 1–5.
+   */
+  currentVersionScore: number;
+  /** Total number of ratings (current version) */
   currentVersionReviews: number;
   /** iPhone/iPod screenshot URLs */
   screenshots: string[];
@@ -96,4 +139,26 @@ export interface Ratings {
   ratings: number;
   /** Rating distribution by star count */
   histogram: RatingHistogram;
+}
+
+/**
+ * Section label for similar/related app links on an App Store app page.
+ * Typical values: "customers-also-bought", "more-by-developer", "you-might-also-like", "other".
+ */
+export type SimilarLinkType =
+  | 'customers-also-bought'
+  | 'more-by-developer'
+  | 'you-might-also-like'
+  | 'similar-apps'
+  | 'other';
+
+/**
+ * One similar/related app with the section it was found in.
+ * Returned by `similar()` when `includeLinkType: true`.
+ */
+export interface SimilarApp {
+  /** Full app details */
+  app: App;
+  /** Section where the link appeared (e.g. "Customers Also Bought", "More by developer") */
+  linkType: SimilarLinkType;
 }
