@@ -119,9 +119,14 @@ export async function app(options: AppOptions): Promise<App> {
 
   const { id, appId, country = 'us', lang, ratings: includeRatings, requestOptions } = options;
 
+  const lookupId = id ?? appId;
+  if (lookupId === undefined) {
+    throw new Error('Either id or appId is required');
+  }
+
   const apps = await lookup(
-    (id || appId) as number,
-    id ? 'id' : 'bundleId',
+    lookupId,
+    id != null ? 'id' : 'bundleId',
     country,
     lang,
     requestOptions

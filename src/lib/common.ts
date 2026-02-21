@@ -72,18 +72,22 @@ export function cleanApp(app: ITunesAppResponse): App {
   };
 }
 
+/** ID type for lookup: numeric (id, artistId) or string (bundleId). */
+export type LookupId = number | number[] | string | string[];
+
 /**
- * Looks up apps by ID, bundle ID, or artist ID from iTunes API
+ * Looks up apps by ID, bundle ID, or artist ID from iTunes API.
+ * Accepts numeric IDs for `id` / `artistId` and string IDs for `bundleId`.
  */
 export async function lookup(
-  ids: number | number[],
+  ids: LookupId,
   idField: 'id' | 'bundleId' | 'artistId',
   country = 'us',
   lang?: string,
   requestOptions?: RequestOptions
 ): Promise<App[]> {
   const idsArray = Array.isArray(ids) ? ids : [ids];
-  const idsString = idsArray.join(',');
+  const idsString = idsArray.map(String).join(',');
 
   // Map idField to the correct URL parameter name
   // artistId should use 'id' parameter, not 'artistId'
