@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **sideEffects: false:** Package declares no side effects so bundlers can tree-shake unused exports. Resolves CODE-REVIEW C4.
 - **search() device filter:** Optional `device` option (`device.IPAD`, `device.MAC`, or `device.ALL`) to filter search results by store. Passed to the iTunes Search API as `entity`. Invalid values throw `Invalid device: "..."`. Resolves CODE-REVIEW P1 (device constant was exported but no method accepted it).
 
 ### Fixed
 
+- **Vitest watch mode:** Explicit `pool: 'forks'` in vitest.config.ts to avoid "Failed to Terminate Worker" and watch-mode hangs when using Node fetch (tests mock `globalThis.fetch`). Resolves CODE-REVIEW C3.
+- **CJS TypeScript consumers:** Exports map now nests `types` under `import`/`require` so CJS consumers get `index.d.cts` and ESM consumers get `index.d.ts`. Resolves CODE-REVIEW P3.
 - **doRequest retries:** Invalid `retries` values (e.g. `-1`, `NaN`) are now clamped to 0 so one request is always attempted instead of throwing a generic "Request failed" with no HTTP call. Resolves CODE-REVIEW P1 item 6.
 - **doRequest timeoutMs:** Invalid `timeoutMs` (e.g. `0`, negative, `NaN`, `Infinity`) now throws a clear error before any request instead of a cryptic `RangeError` from `AbortSignal.timeout()`. Resolves CODE-REVIEW P1 item 7.
 - **similar (TEST-4):** Added fixture-based unit tests for section heading detection and link extraction. `getLinkTypeFromHeadingText()` is now exported and tested for all `SECTION_PATTERNS` (customers-also-bought, more-by-developer, you-might-also-like, similar-apps, other); one HTML snippet test exercises cheerio parsing of headings and `/app/id` links so markup changes can be caught.
@@ -20,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RSS list feed:** `im:image` now accepts either a single image object or an array (same pattern as `link`). Avoids validation failure if the API returns a single object; `list()` normalizes to array when resolving the icon URL.
 - **ratings() histogram:** Documented assumption that bars are in 5→1 order; sanity check that histogram sum equals total count now logs a warning (no throw) when mismatch detected; parsed result is still returned. Does not detect order flip without per-row labels (see CODE-REVIEW BUG-C).
 - **list() developerId:** Parsing no longer breaks when the developer URL slug contains "id" (e.g. `identity-games`, `idle-corp`). Replaced string split on `/id` with regex `/\/id(\d+)/` so only `/id` followed by digits is matched.
+- **fileSizeBytes schema:** iTunes API sometimes returns `fileSizeBytes` as a number; schema now accepts `string | number` to avoid validation failures. Resolves CODE-REVIEW B3.
+- **HttpError:** Added `Object.setPrototypeOf(this, HttpError.prototype)` so `instanceof HttpError` works correctly after transpilation to ES5. Resolves CODE-REVIEW E5.
 
 ## [3.0.0] - Unreleased
 

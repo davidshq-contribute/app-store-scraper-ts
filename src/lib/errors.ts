@@ -25,6 +25,8 @@ export class HttpError extends Error {
 
   constructor(message: string, status: number, url?: string) {
     super(message);
+    // Ensures instanceof HttpError works after transpilation to ES5 (e.g. Babel, older targets).
+    Object.setPrototypeOf(this, HttpError.prototype);
     this.name = 'HttpError';
     this.status = status;
     this.url = url;
