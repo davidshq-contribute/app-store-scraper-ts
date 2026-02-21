@@ -130,9 +130,9 @@ export function storeId(country: string): number {
 }
 
 /**
- * Ensures an array from a value that could be undefined, a single item, or an array
+ * Ensures an array from a value that could be undefined, null, a single item, or an array.
  */
-export function ensureArray<T>(value: T | T[] | undefined): T[] {
+export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
   if (value === undefined || value === null) {
     return [];
   }
@@ -147,7 +147,7 @@ export function validateRequiredField(
   fields: string[],
   errorMessage: string
 ): void {
-  const hasField = fields.some((field) => options[field] !== undefined);
+  const hasField = fields.some((field) => options[field] != null);
   if (!hasField) {
     throw new Error(errorMessage);
   }

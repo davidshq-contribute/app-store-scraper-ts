@@ -71,5 +71,15 @@ describe('common utilities', () => {
         );
       }).toThrow('Either id or appId required');
     });
+
+    it('should treat null as missing (require at least one non-null field)', () => {
+      expect(() => {
+        validateRequiredField(
+          { id: null, appId: null },
+          ['id', 'appId'],
+          'Either id or appId required'
+        );
+      }).toThrow('Either id or appId required');
+    });
   });
 });

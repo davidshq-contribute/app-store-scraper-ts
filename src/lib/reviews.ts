@@ -72,14 +72,20 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   // Skip the first entry as it's typically app metadata
   const reviewEntries = entries.slice(1);
 
-  return reviewEntries.map((entry) => ({
-    id: entry.id?.label || '',
-    userName: entry.author?.name?.label || '',
-    userUrl: entry.author?.uri?.label || '',
-    version: entry['im:version']?.label || '',
-    score: parseInt(entry['im:rating']?.label || '0', 10),
-    title: entry.title?.label || '',
-    text: entry.content?.label || '',
-    updated: entry.updated?.label || '',
-  }));
+  return reviewEntries.map((entry) => {
+    const rawScore = parseInt(entry['im:rating']?.label || '0', 10);
+    const score = Number.isNaN(rawScore)
+      ? 0
+      : Math.max(1, Math.min(5, rawScore));
+    return {
+      id: entry.id?.label || '',
+      userName: entry.author?.name?.label || '',
+      userUrl: entry.author?.uri?.label || '',
+      version: entry['im:version']?.label || '',
+      score,
+      title: entry.title?.label || '',
+      text: entry.content?.label || '',
+      updated: entry.updated?.label || '',
+    };
+  });
 }

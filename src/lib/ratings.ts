@@ -50,7 +50,10 @@ function parseRatings(html: string): Ratings {
 
   // Extract ratings by star (displayed from 5 to 1)
   const ratingsByStar: number[] = $('.vote .total')
-    .map((_, el) => parseInt($(el).text(), 10))
+    .map((_, el) => {
+      const n = parseInt($(el).text(), 10);
+      return Number.isNaN(n) ? 0 : n;
+    })
     .get();
 
   // Build histogram (convert array index to star rating)

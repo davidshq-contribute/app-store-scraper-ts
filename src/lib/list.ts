@@ -71,7 +71,9 @@ export async function list(options: ListOptions = {}): Promise<App[]> {
   const ids = entries
     .map((entry) => {
       const id = entry.id?.attributes?.['im:id'];
-      return id ? parseInt(id, 10) : null;
+      if (!id) return null;
+      const n = parseInt(id, 10);
+      return Number.isNaN(n) ? null : n;
     })
     .filter((id): id is number => id !== null);
 
