@@ -22,7 +22,7 @@ export const iTunesAppResponseSchema = z.looseObject({
   primaryGenreId: z.coerce.number().optional(),
   contentAdvisoryRating: z.string().optional(),
   languageCodesISO2A: z.array(z.string()).optional(),
-  fileSizeBytes: z.string().optional(),
+  fileSizeBytes: z.union([z.string(), z.number()]).optional(),
   minimumOsVersion: z.string().optional(),
   releaseDate: z.string().optional(),
   currentVersionReleaseDate: z.string().optional(),

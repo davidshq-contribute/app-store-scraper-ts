@@ -13,6 +13,8 @@ import { HttpError } from './errors.js';
  * @returns Promise resolving to ratings with total count and histogram
  * @throws {HttpError} When the response is 200 but the body is empty, throws with message `No ratings data returned` and `status: 204` (No Content). Use `err instanceof HttpError && err.status === 204` to distinguish from real HTTP 404.
  *
+ * `requestOptions.headers` can override the default `X-Apple-Store-Front` header; this is intentional for advanced use cases (e.g. store-specific or regional testing).
+ *
  * @example
  * ```typescript
  * const result = await ratings({ id: 553834731 });

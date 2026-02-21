@@ -117,7 +117,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   const limit = Math.min(num, 200);
 
   let url = `https://itunes.apple.com/${country}/rss/${collection}`;
-  if (category) {
+  if (category != null) {
     url += `/genre=${category}`;
   }
   url += `/limit=${limit}/json`;
