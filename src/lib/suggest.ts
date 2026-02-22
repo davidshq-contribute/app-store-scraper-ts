@@ -44,26 +44,21 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
 
   const result = validationResult.data;
 
-  // Navigate the plist structure to extract suggestions
+  // Navigate the plist structure to extract suggestions.
+  // Apple uses plist.dict with keys "title" and "hints"; hints is an array of strings.
   const arrayData = result.plist?.dict?.array;
 
-  // If array is a string or doesn't have dict, return empty
-  if (!arrayData || typeof arrayData === 'string' || !arrayData.dict) {
+  if (!arrayData || typeof arrayData === 'string') {
     return [];
   }
 
-  // API may return a single dict or an array of dicts; normalize to array
-  const dicts = ensureArray(arrayData.dict);
-
-  const suggestions: Suggestion[] = [];
-
-  for (const dict of dicts) {
-    const strings = ensureArray(dict.string);
-    const suggestionTerm = strings[0];
-    if (suggestionTerm) {
-      suggestions.push({ term: suggestionTerm });
-    }
+  const directStrings = arrayData.string;
+  if (directStrings === undefined) {
+    return [];
   }
 
-  return suggestions;
+  const terms = ensureArray(directStrings).filter(
+    (s): s is string => typeof s === 'string' && s.length > 0
+  );
+  return terms.map((term) => ({ term }));
 }

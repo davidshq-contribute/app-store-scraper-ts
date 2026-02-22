@@ -202,12 +202,9 @@ export type ReviewEntry = z.infer<typeof reviewEntrySchema>;
 export type ReviewsFeed = z.infer<typeof reviewsFeedSchema>;
 
 /**
- * Suggestion response schema
+ * Suggestion response schema.
+ * Apple's API returns plist.dict with keys "title" and "hints"; hints is an array of strings.
  */
-export const suggestDictSchema = z.object({
-  string: z.union([z.string(), z.array(z.string())]).optional(),
-});
-
 export const suggestResponseSchema = z.object({
   plist: z
     .object({
@@ -217,9 +214,7 @@ export const suggestResponseSchema = z.object({
             .union([
               z.string(),
               z.object({
-                dict: z
-                  .union([suggestDictSchema, z.array(suggestDictSchema)])
-                  .optional(),
+                string: z.union([z.string(), z.array(z.string())]).optional(),
               }),
             ])
             .optional(),

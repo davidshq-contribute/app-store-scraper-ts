@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **suggest():** Support Apple's response format: `plist.dict.hints` is an array of strings. Live suggest API currently returns empty hints; integration test skipped until Apple returns data (see docs/POSTPONED.md).
 - **Vitest watch mode:** Explicit `pool: 'forks'` in vitest.config.ts to avoid "Failed to Terminate Worker" and watch-mode hangs when using Node fetch (tests mock `globalThis.fetch`). Resolves CODE-REVIEW C3.
 - **CJS TypeScript consumers:** Exports map now nests `types` under `import`/`require` so CJS consumers get `index.d.cts` and ESM consumers get `index.d.ts`. Resolves CODE-REVIEW P3.
 - **doRequest retries:** Invalid `retries` values (e.g. `-1`, `NaN`) are now clamped to 0 so one request is always attempted instead of throwing a generic "Request failed" with no HTTP call. Resolves CODE-REVIEW P1 item 6.
