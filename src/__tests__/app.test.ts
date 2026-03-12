@@ -13,9 +13,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 
 describe('app', () => {
   it('should throw error when neither id nor appId is provided', async () => {
-    await expect(
-      app({})
-    ).rejects.toThrow('Either id or appId is required');
+    await expect(app({})).rejects.toThrow('Either id or appId is required');
   });
 
   it('throws Error when lookup returns no results (by id)', async () => {

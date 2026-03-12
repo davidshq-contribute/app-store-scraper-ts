@@ -54,9 +54,7 @@ function minimalApp(id: number, title: string): App {
 
 describe('similar', () => {
   it('should throw error when neither id nor appId is provided', async () => {
-    await expect(
-      similar({})
-    ).rejects.toThrow('Either id or appId is required');
+    await expect(similar({})).rejects.toThrow('Either id or appId is required');
   });
 
   describe('getLinkTypeFromHeadingText (section patterns)', () => {
@@ -121,8 +119,14 @@ describe('similar', () => {
       });
 
       expect(results).toHaveLength(3);
-      expect(results[0]).toEqual({ app: minimalApp(111, 'App 1'), linkType: 'customers-also-bought' });
-      expect(results[1]).toEqual({ app: minimalApp(222, 'App 2'), linkType: 'customers-also-bought' });
+      expect(results[0]).toEqual({
+        app: minimalApp(111, 'App 1'),
+        linkType: 'customers-also-bought',
+      });
+      expect(results[1]).toEqual({
+        app: minimalApp(222, 'App 2'),
+        linkType: 'customers-also-bought',
+      });
       expect(results[2]).toEqual({ app: minimalApp(333, 'App 3'), linkType: 'more-by-developer' });
     });
   });
@@ -147,19 +151,27 @@ describe('similar', () => {
       expect(results[0]!.id).not.toBe(842842640); // Should not include the original app
     });
 
-    it('should return SimilarApp[] with linkType when includeLinkType: true', { timeout: 15000 }, async () => {
-      const results = await similar({ id: 842842640, country: DEFAULT_COUNTRY, includeLinkType: true });
+    it(
+      'should return SimilarApp[] with linkType when includeLinkType: true',
+      { timeout: 15000 },
+      async () => {
+        const results = await similar({
+          id: 842842640,
+          country: DEFAULT_COUNTRY,
+          includeLinkType: true,
+        });
 
-      expect(Array.isArray(results)).toBe(true);
-      expect(results.length, 'API returned no similar apps').toBeGreaterThan(0);
+        expect(Array.isArray(results)).toBe(true);
+        expect(results.length, 'API returned no similar apps').toBeGreaterThan(0);
 
-      const first = results[0]!;
-      expect(first).toHaveProperty('app');
-      expect(first).toHaveProperty('linkType');
-      expect(first.app).toHaveProperty('id');
-      expect(first.app).toHaveProperty('title');
-      expect(typeof first.linkType).toBe('string');
-    });
+        const first = results[0]!;
+        expect(first).toHaveProperty('app');
+        expect(first).toHaveProperty('linkType');
+        expect(first.app).toHaveProperty('id');
+        expect(first.app).toHaveProperty('title');
+        expect(typeof first.linkType).toBe('string');
+      }
+    );
 
     it('should fetch similar apps by bundle ID', { timeout: 15000 }, async () => {
       // Google Docs bundle ID

@@ -4,6 +4,24 @@ Record of non-obvious design and implementation choices so future changes stay c
 
 ---
 
+## App page consolidation: single fetch for privacy, similar, version history
+
+**Decision:** Add `appPageDetails()` that fetches the App Store app page once and parses privacy, similar app IDs, and version history from the same HTML. Consumers needing more than one of these should use `appPageDetails()` to avoid multiple requests.
+
+**Context:**
+
+- `privacy()`, `similar()`, and `versionHistory()` all fetch `apps.apple.com/{country}/app/id{id}`.
+- Each call triggered a separate HTTP request. When the crawler fetches privacy during enrichment, it could also extract similar IDs and version history from the same response at no extra cost.
+- `appPageDetails()` centralizes the fetch and returns `{ privacy, similarIds, versionHistory }`. The crawler uses it for privacy storage; `similarIds` and `versionHistory` are available for future use (e.g. discovery pipeline).
+
+**Implications:**
+
+- Use `appPageDetails()` when you need privacy and optionally similar IDs or version history.
+- Keep `privacy()`, `similar()`, and `versionHistory()` for single-purpose callers.
+- Parsing logic is shared internally; DOM structure changes affect all three.
+
+---
+
 ## Privacy and version history: API vs HTML scraping
 
 **Decision:** Use Cheerio to scrape the app page HTML for `privacy()` and `versionHistory()`. Do not use the amp-api-edge catalog API for these endpoints until token extraction works again.
@@ -22,7 +40,7 @@ Record of non-obvious design and implementation choices so future changes stay c
 - Keep the HTML scraping method for `privacy()` and `versionHistory()`.
 - If Apple restores the token in the page later, run `scripts/check-amp-api-token.mjs` again; if it succeeds, consider switching back to the API.
 - When touching privacy/version-history code, prefer selectors that are less likely to change (e.g. `data-testid` over Svelte hashes) and document any assumptions.
-- **These methods rely on Apple’s DOM** (see CODE-REVIEW.md FRAGILE-1, FRAGILE-2). They may break when Apple changes the app page structure or class names. Do not add automated tests for `privacy` or `version-history` until selectors are stabilized; otherwise tests will be flaky.
+- **These methods rely on Apple’s DOM.** They may break when Apple changes the app page structure or class names. See CODE-REVIEW.md for DOM-related notes (e.g. fixture-based tests, integration test recommendations). Do not add automated tests for `privacy` or `version-history` until selectors are stabilized; otherwise tests will be flaky.
 - **If `versionHistory()` returns wrong or empty data:** (1) Scope to version-history-shaped articles only—e.g. only push entries when the article has a child `time[datetime]` (and optionally `h4`) so we don’t pull in articles from other dialogs that use `data-testid="dialog"`. (2) If Apple adds wrapper elements (e.g. `article > div > h4`), relax the direct-child selectors to `article h4` / `article p` (first match) so we still get version and release notes.
 
 ---
@@ -42,7 +60,7 @@ Record of non-obvious design and implementation choices so future changes stay c
 **Implications:**
 
 - Keep using the public iTunes Search API for `search()` by default.
-- Add MZStore-based search (and optional `idsOnly` + lookup) only when there is a concrete need for JS parity or store-specific results. See `docs/COMPARISON-WITH-APP-STORE-SCRAPER-JS.md` for details.
+- Add MZStore-based search (and optional `idsOnly` + lookup) only when there is a concrete need for JS parity or store-specific results.
 
 ---
 

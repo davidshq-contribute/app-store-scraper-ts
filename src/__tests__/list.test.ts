@@ -97,10 +97,15 @@ describe('list', () => {
               id: { attributes: { 'im:id': '111', 'im:bundleId': 'com.single-image.app' } },
               'im:name': { label: 'Single Image App' },
               'im:image': { label: 'https://example.com/single-icon.png' },
-              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id111', rel: 'alternate' } }],
+              link: [
+                { attributes: { href: 'https://apps.apple.com/us/app/x/id111', rel: 'alternate' } },
+              ],
               'im:price': { attributes: { amount: '0', currency: 'USD' } },
               summary: { label: 'Desc' },
-              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              'im:artist': {
+                label: 'Dev',
+                attributes: { href: 'https://apps.apple.com/us/developer/x/id1' },
+              },
               category: { attributes: { label: 'Games', 'im:id': '6014' } },
               'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
             },
@@ -127,10 +132,15 @@ describe('list', () => {
               id: { attributes: { 'im:id': '42', 'im:bundleId': 'com.free.app' } },
               'im:name': { label: 'Free App' },
               'im:image': [{ label: 'https://example.com/icon.png' }],
-              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id42', rel: 'alternate' } }],
+              link: [
+                { attributes: { href: 'https://apps.apple.com/us/app/x/id42', rel: 'alternate' } },
+              ],
               'im:price': { attributes: { amount: 'free', currency: 'USD' } },
               summary: { label: 'Desc' },
-              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              'im:artist': {
+                label: 'Dev',
+                attributes: { href: 'https://apps.apple.com/us/developer/x/id1' },
+              },
               category: { attributes: { label: 'Games', 'im:id': '6014' } },
               'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
             },
@@ -158,7 +168,9 @@ describe('list', () => {
               id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.test.app' } },
               'im:name': { label: 'Test' },
               'im:image': [{ label: 'https://example.com/icon.png' }],
-              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              link: [
+                { attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } },
+              ],
               'im:price': { attributes: { amount: '0', currency: 'USD' } },
               summary: { label: 'Desc' },
               'im:artist': {

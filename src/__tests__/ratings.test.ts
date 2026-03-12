@@ -31,6 +31,7 @@ describe('parseRatings', () => {
     const result = parseRatings(html);
 
     expect(result.ratings).toBe(100);
+    expect(result.warnings).toBeUndefined();
     expect(Object.keys(result.histogram).sort()).toEqual(['1', '2', '3', '4', '5']);
     // Order in HTML is 5,4,3,2,1 → index 0→5, 1→4, 2→3, 3→2, 4→1
     expect(result.histogram[5]).toBe(10);
@@ -76,17 +77,21 @@ describe('parseRatings', () => {
     expect(result.histogram[5]).toBe(1);
   });
 
-  it('warns when histogram sum does not match total (page structure change)', () => {
-    // Total 999 but first 5 bars sum to 10+20+30+25+15 = 100; triggers sanity check.
+  it('returns parsed result with warnings when histogram sum does not match total (page structure change)', () => {
+    // Total 999 but first 5 bars sum to 10+20+30+25+15 = 100; sanity check detects mismatch.
     const html = fixtureHtml(999, 10, 20, 30, 25, 15);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = parseRatings(html);
     expect(result.ratings).toBe(999);
     expect(result.histogram[5]).toBe(10);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Ratings histogram sum \(100\) does not match total count \(999\)/)
-    );
-    warnSpy.mockRestore();
+    expect(result.histogram[4]).toBe(20);
+    expect(result.histogram[3]).toBe(30);
+    expect(result.histogram[2]).toBe(25);
+    expect(result.histogram[1]).toBe(15);
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings![0]).toContain('100');
+    expect(result.warnings![0]).toContain('999');
+    expect(result.warnings![0]).toContain('does not match');
   });
 });
 

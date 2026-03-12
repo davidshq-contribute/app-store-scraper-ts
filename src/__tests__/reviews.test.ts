@@ -40,7 +40,15 @@ describe('reviews', () => {
   describe('score parsing (BUG-1)', () => {
     /** Minimal feed valid for reviewsFeedSchema: first entry is app metadata (skipped), rest are reviews. */
     const mockFeedWithScores = (
-      ...entries: Array<{ 'im:rating'?: { label?: string }; id?: { label?: string }; author?: { name?: { label?: string } }; title?: { label?: string }; content?: { label?: string }; updated?: { label?: string }; 'im:version'?: { label?: string } }>
+      ...entries: Array<{
+        'im:rating'?: { label?: string };
+        id?: { label?: string };
+        author?: { name?: { label?: string } };
+        title?: { label?: string };
+        content?: { label?: string };
+        updated?: { label?: string };
+        'im:version'?: { label?: string };
+      }>
     ) => ({
       feed: {
         entry: [

@@ -4,7 +4,7 @@ import type { RatingsOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest, storeId } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
 
 /**
  * Retrieves the rating histogram for an app (1-5 star breakdown).
@@ -19,6 +19,7 @@ import { HttpError } from './errors.js';
  * ```typescript
  * const result = await ratings({ id: 553834731 });
  * // Returns: { ratings: 4800, histogram: { 1: 100, 2: 200, 3: 500, 4: 1000, 5: 3000 } }
+ * // May include optional warnings when histogram sum does not match total.
  * ```
  */
 export async function ratings(options: RatingsOptions): Promise<Ratings> {
@@ -26,7 +27,7 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
 
   validateCountry(country);
   if (id == null) {
-    throw new Error('id is required');
+    throw new ValidationError('id is required', 'id');
   }
 
   const storeFront = storeId(country);
@@ -51,18 +52,17 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
  * Parses ratings from iTunes customer-reviews HTML.
  * Exported for unit testing (histogram shape / BUG-2).
  * When the histogram bar sum does not match the total count (e.g. page structure change),
- * logs a warning and still returns the parsed result.
+ * returns the parsed result with a `warnings` array; consumers control logging.
  * @param html - Raw HTML from the customer-reviews page
- * @returns Ratings with total count and histogram (keys 1–5 only)
+ * @returns Ratings with total count and histogram (keys 1–5 only). May include `warnings` when histogram sum ≠ total.
  */
 export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
   // Extract total rating count
   const ratingsMatch = $('.rating-count').text().match(/\d+/);
-  const totalRatings = Array.isArray(ratingsMatch) && ratingsMatch[0]
-    ? parseInt(ratingsMatch[0], 10)
-    : 0;
+  const totalRatings =
+    Array.isArray(ratingsMatch) && ratingsMatch[0] ? parseInt(ratingsMatch[0], 10) : 0;
 
   // Extract ratings by star. Assumes the page renders bars in descending order
   // (5★, 4★, 3★, 2★, 1★). We do not verify per-row labels; if Apple changes
@@ -90,14 +90,13 @@ export function parseRatings(html: string): Ratings {
   // Sanity check: histogram sum should match total when we have a total.
   // Catches structural changes (e.g. wrong number of .vote .total elements).
   // Does not detect order flip (5↔1); that would require per-row labels in HTML.
-  if (totalRatings > 0) {
-    const sum = histogram[1] + histogram[2] + histogram[3] + histogram[4] + histogram[5];
-    if (sum !== totalRatings) {
-      console.warn(
-        `Ratings histogram sum (${sum}) does not match total count (${totalRatings}); page structure may have changed`
-      );
-    }
-  }
-
-  return { ratings: totalRatings, histogram };
+  // On mismatch, return parsed result with a warning; consumers control logging.
+  const histogramSum = histogram[1] + histogram[2] + histogram[3] + histogram[4] + histogram[5];
+  const mismatch = totalRatings > 0 && histogramSum !== totalRatings;
+  const warnings = mismatch
+    ? [
+        `Ratings histogram sum (${histogramSum}) does not match total count (${totalRatings}). Data may be inconsistent.`,
+      ]
+    : undefined;
+  return { ratings: totalRatings, histogram, ...(warnings && { warnings }) };
 }

@@ -6,6 +6,8 @@ import {
   parseJson,
   resolveAppId,
   doRequest,
+  safeParseInt,
+  lookup,
 } from '../lib/common.js';
 
 /** Minimal iTunes lookup JSON so lookup() returns one app with the given trackId. */
@@ -17,6 +19,26 @@ function minimalLookupJson(trackId: number): string {
 }
 
 describe('common utilities', () => {
+  describe('safeParseInt', () => {
+    it('parses valid numbers and strings', () => {
+      expect(safeParseInt(42)).toBe(42);
+      expect(safeParseInt('123')).toBe(123);
+      expect(safeParseInt('0')).toBe(0);
+    });
+
+    it('returns fallback for NaN', () => {
+      expect(safeParseInt('abc')).toBe(0);
+      expect(safeParseInt('abc', 99)).toBe(99);
+      expect(safeParseInt(null)).toBe(0);
+      expect(safeParseInt(undefined)).toBe(0);
+    });
+
+    it('returns custom fallback for nullish inputs', () => {
+      expect(safeParseInt(null, 99)).toBe(99);
+      expect(safeParseInt(undefined, 99)).toBe(99);
+    });
+  });
+
   describe('parseJson', () => {
     it('parses valid JSON and returns unknown', () => {
       expect(parseJson('{"a":1}')).toEqual({ a: 1 });
@@ -101,7 +123,9 @@ describe('common utilities', () => {
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
       }) as typeof fetch;
-      await expect(resolveAppId({ appId: 'com.nonexistent.app' })).rejects.toThrow('App not found: com.nonexistent.app');
+      await expect(resolveAppId({ appId: 'com.nonexistent.app' })).rejects.toThrow(
+        'App not found: com.nonexistent.app'
+      );
     });
 
     it('passes country and requestOptions to lookup', async () => {
@@ -114,6 +138,41 @@ describe('common utilities', () => {
         expect.stringMatching(/itunes\.apple\.com\/lookup.*country=gb/),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('lookup cleanApp parsing', () => {
+    const originalFetch = globalThis.fetch;
+    beforeEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('parses genreIds, primaryGenreId, size via safeParseInt', async () => {
+      const json = JSON.stringify({
+        resultCount: 1,
+        results: [
+          {
+            kind: 'software',
+            trackId: 123,
+            bundleId: 'com.test.app',
+            genreIds: [6014, '6001', 0],
+            primaryGenreId: 6014,
+            fileSizeBytes: '1024',
+          },
+        ],
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(json),
+      }) as typeof fetch;
+      const apps = await lookup('com.test.app', 'bundleId');
+      expect(apps).toHaveLength(1);
+      expect(apps[0]!.genreIds).toEqual([6014, 6001]); // 0 filtered (Apple genre IDs are 6000+)
+      expect(apps[0]!.primaryGenreId).toBe(6014);
+      expect(apps[0]!.size).toBe(1024);
     });
   });
 
@@ -193,11 +252,7 @@ describe('common utilities', () => {
 
     it('should not throw when one of multiple fields is present', () => {
       expect(() => {
-        validateRequiredField(
-          { appId: 'test' },
-          ['id', 'appId'],
-          'Either id or appId required'
-        );
+        validateRequiredField({ appId: 'test' }, ['id', 'appId'], 'Either id or appId required');
       }).not.toThrow();
     });
 
@@ -209,11 +264,7 @@ describe('common utilities', () => {
 
     it('should throw when none of multiple fields are present', () => {
       expect(() => {
-        validateRequiredField(
-          { foo: 'bar' },
-          ['id', 'appId'],
-          'Either id or appId required'
-        );
+        validateRequiredField({ foo: 'bar' }, ['id', 'appId'], 'Either id or appId required');
       }).toThrow('Either id or appId required');
     });
 

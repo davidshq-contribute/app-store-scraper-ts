@@ -3,11 +3,7 @@
  * Prevents regressions when schemas change; no network required.
  */
 import { describe, it, expect } from 'vitest';
-import {
-  iTunesLookupResponseSchema,
-  reviewsFeedSchema,
-  rssFeedSchema,
-} from '../lib/schemas.js';
+import { iTunesLookupResponseSchema, reviewsFeedSchema, rssFeedSchema } from '../lib/schemas.js';
 
 describe('iTunesLookupResponseSchema', () => {
   const validFixture = {

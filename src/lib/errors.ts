@@ -36,3 +36,35 @@ export class HttpError extends Error {
     }
   }
 }
+
+/**
+ * Error thrown when caller-provided options fail validation (e.g. missing required
+ * fields, invalid country code, out-of-range pagination).
+ *
+ * Use `instanceof ValidationError` to distinguish "bad input" from network / API
+ * errors ({@link HttpError}). The `field` property (when set) identifies which
+ * option triggered the error.
+ *
+ * @example
+ * try {
+ *   await app({ id: undefined });
+ * } catch (err) {
+ *   if (err instanceof ValidationError) {
+ *     console.error(`Invalid input: ${err.message} (field: ${err.field})`);
+ *   }
+ * }
+ */
+export class ValidationError extends Error {
+  /** Option field name that failed validation (when identifiable). */
+  readonly field?: string;
+
+  constructor(message: string, field?: string) {
+    super(message);
+    Object.setPrototypeOf(this, ValidationError.prototype);
+    this.name = 'ValidationError';
+    this.field = field;
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ValidationError);
+    }
+  }
+}

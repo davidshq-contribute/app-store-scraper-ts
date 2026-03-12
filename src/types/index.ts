@@ -1,11 +1,5 @@
 export type { App, ListApp, RatingHistogram, Ratings, SimilarApp, SimilarLinkType } from './app.js';
-export type {
-  Review,
-  VersionHistory,
-  Suggestion,
-  PrivacyDetails,
-  PrivacyType,
-} from './review.js';
+export type { Review, VersionHistory, Suggestion, PrivacyDetails, PrivacyType } from './review.js';
 export type {
   RequestOptions,
   BaseOptions,

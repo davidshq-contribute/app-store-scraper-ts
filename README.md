@@ -56,7 +56,29 @@ const games = await list({
 const appReviews = await reviews({ id: 553834731, page: 1 });
 ```
 
-**📖 See [examples/all-methods.ts](examples/all-methods.ts) for comprehensive examples of all 11 API methods.**
+**📖 See [examples/all-methods.ts](examples/all-methods.ts) for comprehensive examples of all 12 API methods.**
+
+### Error handling
+
+Methods throw `HttpError` (extends `Error`) on non-OK responses. Use `instanceof HttpError` and `err.status` to branch on specific status codes instead of parsing the message:
+
+```typescript
+import { app, HttpError } from '@perttu/app-store-scraper';
+
+try {
+  const appData = await app({ id: 123 });
+} catch (err) {
+  if (err instanceof HttpError && err.status === 404) {
+    // App not found
+  }
+  if (err instanceof HttpError && err.status === 204) {
+    // Success but no content (e.g. empty ratings response)
+  }
+  throw err;
+}
+```
+
+`HttpError` has `status` (number) and optional `url` (string) for structured handling.
 
 ## API
 
@@ -73,6 +95,9 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 - `suggest()` - Get search suggestions
 - `privacy()` - Get privacy policy details
 - `versionHistory()` - Get version release history
+- `appPageDetails()` - Fetch the app page once and parse privacy, similar app IDs, and version history in a single request. Returns `{ privacy, similarIds, versionHistory }`.
+
+**Note:** `privacy()`, `versionHistory()`, and `similar()` each fetch the app page HTML separately. If you need more than one of these (e.g. privacy + similar IDs), prefer `appPageDetails()` to avoid multiple requests to the same page. Use `similar()` only when you need full `App[]` for similar apps and don't need privacy or version history. See `docs/DEV-DECISIONS.md` (App page consolidation).
 
 **Note:** `privacy()` and `versionHistory()` scrape Apple’s app page HTML and depend on its DOM structure; they may break if Apple changes the page. See `docs/DEV-DECISIONS.md` for details.
 

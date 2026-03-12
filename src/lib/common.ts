@@ -1,11 +1,8 @@
 import type { App } from '../types/app.js';
 import { DEFAULT_COUNTRY, markets } from '../types/constants.js';
-import {
-  iTunesLookupResponseSchema,
-  type ITunesAppResponse,
-} from './schemas.js';
+import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
-import { HttpError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
 import { validateCountry } from './validate.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -44,15 +41,18 @@ function isRetryable(status?: number, err?: unknown): boolean {
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   const defaultHeaders: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
   };
 
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Error(
-      `Invalid timeoutMs: must be a positive number, got ${timeoutMs === 0 ? '0' : String(timeoutMs)}`
+    throw new ValidationError(
+      `Invalid timeoutMs: must be a positive number, got ${timeoutMs === 0 ? '0' : String(timeoutMs)}`,
+      'timeoutMs'
     );
   }
   const rawRetries = options?.retries ?? DEFAULT_RETRIES;
@@ -82,14 +82,17 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
         throw new HttpError(
           `Request to ${url} failed with status ${response.status}`,
           response.status,
-          url,
+          url
         );
       }
 
       return await response.text();
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+      const status =
+        err && typeof err === 'object' && 'status' in err
+          ? (err as { status?: number }).status
+          : undefined;
       if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
         const delayMs = 1000 * 2 ** attempt;
         await new Promise((r) => setTimeout(r, delayMs));
@@ -112,22 +115,29 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
  * @throws Error with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
  * @internal
  */
-export function parseJson(
-  body: string,
-  context?: { status?: number }
-): unknown {
+export function parseJson(body: string, context?: { status?: number }): unknown {
   try {
     return JSON.parse(body) as unknown;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const statusPart =
-      context?.status != null ? ` (status ${context.status})` : '';
-    const bodyPreview =
-      body.length > 200 ? `${body.slice(0, 200)}...` : body;
-    throw new Error(
-      `Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`
-    );
+    const statusPart = context?.status != null ? ` (status ${context.status})` : '';
+    const bodyPreview = body.length > 200 ? `${body.slice(0, 200)}...` : body;
+    throw new Error(`Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`);
   }
+}
+
+/**
+ * Parses a value as an integer, returning the fallback when the result would be NaN.
+ * Null and undefined are treated as unparseable and fall through to the fallback.
+ * @param value - Value to parse (string, number, or unknown; null/undefined → fallback)
+ * @param fallback - Value to return when parsing yields NaN (default 0)
+ * @returns Parsed integer or fallback
+ * @internal
+ */
+export function safeParseInt(value: unknown, fallback = 0): number {
+  if (value == null) return fallback;
+  const n = parseInt(typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '', 10);
+  return Number.isNaN(n) ? fallback : n;
 }
 
 /**
@@ -143,20 +153,12 @@ export function cleanApp(app: ITunesAppResponse): App {
     description: app.description ?? '',
     icon: app.artworkUrl512 ?? app.artworkUrl100 ?? '',
     genres: app.genres ?? [],
-    genreIds: (app.genreIds ?? [])
-      .map((id) => parseInt(String(id), 10))
-      .filter((n) => !Number.isNaN(n)),
+    genreIds: (app.genreIds ?? []).filter((id) => id !== 0), // Apple genre IDs are 6000+; 0 = invalid/unknown (schema already coerces to number)
     primaryGenre: app.primaryGenreName ?? '',
-    primaryGenreId: (() => {
-      const n = parseInt(String(app.primaryGenreId ?? 0), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })(),
+    primaryGenreId: safeParseInt(app.primaryGenreId),
     contentRating: app.contentAdvisoryRating ?? '',
     languages: app.languageCodesISO2A ?? [],
-    size: (() => {
-      const n = parseInt(String(app.fileSizeBytes ?? 0), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })(),
+    size: safeParseInt(app.fileSizeBytes),
     requiredOsVersion: app.minimumOsVersion ?? '',
     released: app.releaseDate ?? '',
     updated: app.currentVersionReleaseDate ?? '',
@@ -221,9 +223,7 @@ export async function lookup(
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(
-      `iTunes API response validation failed: ${validationResult.error.message}`
-    );
+    throw new Error(`iTunes API response validation failed: ${validationResult.error.message}`);
   }
 
   const response = validationResult.data;
@@ -274,6 +274,7 @@ export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
 
 /**
  * Validates that at least one of the required fields is present.
+ * @throws {ValidationError} with field names joined by "/" (e.g. "id/appId")
  * @internal
  */
 export function validateRequiredField(
@@ -283,6 +284,6 @@ export function validateRequiredField(
 ): void {
   const hasField = fields.some((field) => options[field] != null);
   if (!hasField) {
-    throw new Error(errorMessage);
+    throw new ValidationError(errorMessage, fields.join('/'));
   }
 }

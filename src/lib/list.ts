@@ -2,7 +2,12 @@ import type { App, ListApp } from '../types/app.js';
 import type { ListOptions } from '../types/options.js';
 import { collection as collectionConstants, DEFAULT_COUNTRY } from '../types/constants.js';
 import { doRequest, lookup, ensureArray, parseJson } from './common.js';
-import { validateCountry, validateCollection, validateCategory, validateListNum } from './validate.js';
+import {
+  validateCountry,
+  validateCollection,
+  validateCategory,
+  validateListNum,
+} from './validate.js';
 import { rssFeedSchema, type RssFeedEntry } from './schemas.js';
 
 /** Parses the app URL from a list feed entry (link with rel="alternate"). */
@@ -81,6 +86,8 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  * @param options - Options for filtering and pagination
  * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true.
  *   If `fullDetail` is a boolean variable, the return type is {@link ListApp[]} | {@link App[]}.
+ * @throws {ValidationError} if `country`, `collection`, `category`, or `num` are invalid
+ * @throws {HttpError} on non-OK HTTP response from the iTunes RSS feed
  *
  * @example
  * ```typescript
@@ -127,9 +134,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   const validationResult = rssFeedSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(
-      `List API response validation failed: ${validationResult.error.message}`
-    );
+    throw new Error(`List API response validation failed: ${validationResult.error.message}`);
   }
 
   const data = validationResult.data;

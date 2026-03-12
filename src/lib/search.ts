@@ -2,6 +2,7 @@ import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY, device as deviceConstants } from '../types/constants.js';
 import { doRequest, cleanApp, parseJson } from './common.js';
+import { ValidationError } from './errors.js';
 import { validateCountry, validateSearchPagination, validateDevice } from './validate.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 
@@ -20,6 +21,8 @@ const ITUNES_SEARCH_MAX_LIMIT = 200;
  *
  * @param options - Search options including term, pagination, etc.
  * @returns When `idsOnly: true`, `Promise<number[]>`; otherwise `Promise<App[]>`.
+ * @throws {ValidationError} if `term` is missing, or `country`/`num`/`page`/`device` are invalid
+ * @throws {HttpError} on non-OK HTTP response from the iTunes Search API
  *
  * @example
  * ```typescript
@@ -44,13 +47,22 @@ export async function search(options: SearchOptions & { idsOnly: true }): Promis
 export async function search(options: SearchOptions & { idsOnly?: false }): Promise<App[]>;
 export async function search(options: SearchOptions): Promise<App[] | number[]>;
 export async function search(options: SearchOptions): Promise<App[] | number[]> {
-  const { term, num = 50, page = 1, country = DEFAULT_COUNTRY, lang, device: deviceOption, idsOnly, requestOptions } = options;
+  const {
+    term,
+    num = 50,
+    page = 1,
+    country = DEFAULT_COUNTRY,
+    lang,
+    device: deviceOption,
+    idsOnly,
+    requestOptions,
+  } = options;
 
   validateCountry(country);
   validateSearchPagination(num, page);
   if (deviceOption != null) validateDevice(deviceOption);
   if (term == null || term === '') {
-    throw new Error('term is required');
+    throw new ValidationError('term is required', 'term');
   }
 
   // Request enough results to cover the requested page. The iTunes Search API
@@ -64,7 +76,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
     country,
     media: 'software',
     entity,
-    limit: String(limit)
+    limit: String(limit),
   });
 
   if (lang) {
@@ -79,9 +91,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(
-      `Search API response validation failed: ${validationResult.error.message}`
-    );
+    throw new Error(`Search API response validation failed: ${validationResult.error.message}`);
   }
 
   const response = validationResult.data;

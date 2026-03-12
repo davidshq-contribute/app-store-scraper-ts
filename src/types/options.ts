@@ -110,7 +110,8 @@ export interface ReviewsOptions extends BaseOptions {
 }
 
 /**
- * Options for the ratings() method
+ * Options for the ratings() method.
+ * Omits `lang`: the customer-reviews endpoint uses the store-front header, not a language parameter.
  */
 export interface RatingsOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID (required) */
@@ -135,7 +136,7 @@ export interface SimilarOptions extends BaseOptions {
 
 /**
  * Options for the suggest() method.
- * Note: suggest uses a global hints endpoint and does not take a country parameter.
+ * Omits `country` and `lang`: Apple's hints endpoint is global (not store-specific).
  */
 export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
   /** Search term (required) */
@@ -143,7 +144,8 @@ export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
 }
 
 /**
- * Options for the privacy() method
+ * Options for the privacy() method.
+ * Omits `lang`: the App Store page does not vary privacy labels by language parameter.
  */
 export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID (required) */
@@ -151,10 +153,10 @@ export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
 }
 
 /**
- * Options for the versionHistory() method
+ * Options for the versionHistory() method.
+ * Omits `lang`: the App Store page renders version history in the store's locale, not per-request.
  */
 export interface VersionHistoryOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID (required) */
   id: number;
 }
-

@@ -25,10 +25,7 @@ describe('suggest', () => {
 
       const results = await suggest({ term: 'min' });
 
-      expect(results).toEqual([
-        { term: 'minecraft' },
-        { term: 'minecraft pocket edition' },
-      ]);
+      expect(results).toEqual([{ term: 'minecraft' }, { term: 'minecraft pocket edition' }]);
     });
 
     it('returns empty array when hints is empty', async () => {

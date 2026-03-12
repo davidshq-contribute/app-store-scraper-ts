@@ -53,7 +53,10 @@ export interface App {
   icon: string;
   /** Array of genre names */
   genres: string[];
-  /** Array of genre IDs (numeric) */
+  /**
+   * Array of genre IDs (numeric). Apple genre IDs are 6000+; 0 is invalid/unknown
+   * and is deliberately excluded during parsing.
+   */
   genreIds: number[];
   /** Primary genre name */
   primaryGenre: string;
@@ -139,6 +142,11 @@ export interface Ratings {
   ratings: number;
   /** Rating distribution by star count */
   histogram: RatingHistogram;
+  /**
+   * Optional diagnostic warnings (e.g. histogram sum does not match total).
+   * Consumers control whether to log or handle these.
+   */
+  warnings?: string[];
 }
 
 /**

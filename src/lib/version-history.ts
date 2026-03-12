@@ -4,7 +4,8 @@ import type { VersionHistoryOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { appPageUrl, doRequest } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
+import { parseVersionHistoryFromHtml } from './parsers.js';
 
 /**
  * Retrieves version history for an app.
@@ -14,6 +15,8 @@ import { HttpError } from './errors.js';
  *
  * @param options - Options including app id
  * @returns Promise resolving to array of version history entries (empty if app not found)
+ * @throws {ValidationError} if `id` is missing or `country` is invalid
+ * @throws {HttpError} on non-404 HTTP errors from the App Store page
  *
  * @example
  * ```typescript
@@ -24,7 +27,7 @@ export async function versionHistory(options: VersionHistoryOptions): Promise<Ve
   const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
   if (id == null) {
-    throw new Error('id is required');
+    throw new ValidationError('id is required', 'id');
   }
   validateCountry(country);
 
@@ -40,30 +43,6 @@ export async function versionHistory(options: VersionHistoryOptions): Promise<Ve
     throw error;
   }
 
-  // Parse the HTML
   const $ = cheerio.load(appPageBody);
-
-  // Find version history entries: only articles that contain time[datetime] (avoids other dialogs using data-testid="dialog")
-  const versions: VersionHistory[] = [];
-
-  $('dialog[data-testid="dialog"] article').each((_, element) => {
-    const $article = $(element);
-    if ($article.find('time[datetime]').length === 0) {
-      return;
-    }
-
-    const releaseNotes = $article.find('> p').text().trim();
-    const versionDisplay = $article.find('> h4').text().trim();
-
-    // Extract release date from time element
-    const releaseDateRaw = $article.find('time').attr('datetime') ?? '';
-
-    versions.push({
-      versionDisplay,
-      releaseDate: releaseDateRaw,
-      releaseNotes: releaseNotes || undefined,
-    });
-  });
-
-  return versions;
+  return parseVersionHistoryFromHtml($);
 }

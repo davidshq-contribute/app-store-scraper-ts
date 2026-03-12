@@ -5,6 +5,7 @@
 
 import {
   app,
+  resolveAppId,
   search,
   list,
   developer,
@@ -14,6 +15,7 @@ import {
   suggest,
   privacy,
   versionHistory,
+  appPageDetails,
   collection,
   category,
   sort,
@@ -53,6 +55,11 @@ async function testAllMethods() {
     console.log('\n   Testing app() with bundleId...');
     const appByBundleId = await app({ appId: TEST_BUNDLE_ID });
     console.log(`   ✅ Found by bundle ID: ${appByBundleId.title}`);
+
+    // resolveAppId() - Resolve bundle ID to numeric track ID (lightweight lookup)
+    console.log('\n   Testing resolveAppId()...');
+    const resolvedId = await resolveAppId({ appId: TEST_BUNDLE_ID });
+    console.log(`   ✅ Resolved ${TEST_BUNDLE_ID} → ${resolvedId}`);
 
     // Test with ratings option
     console.log('\n   Testing app() with ratings histogram...');
@@ -209,11 +216,25 @@ async function testAllMethods() {
       console.log('   ⚠️  Version history might not be available for this app');
     }
 
+    // 11. appPageDetails() - Combined fetch for privacy, similar IDs, and version history
+    console.log('\n1️⃣1️⃣  Testing appPageDetails() method...');
+    console.log(line);
+    try {
+      const pageDetails = await appPageDetails({ id: TEST_APP_ID });
+      console.log('✅ App page details retrieved (single request):');
+      console.log(`   Privacy: ${pageDetails.privacy?.privacyPolicyUrl ? 'yes' : 'no'}`);
+      console.log(`   Similar IDs: ${pageDetails.similarIds?.length ?? 0}`);
+      console.log(`   Version history: ${pageDetails.versionHistory?.length ?? 0} entries`);
+    } catch (error) {
+      console.log('   ⚠️  App page details might not be available for this app');
+    }
+
     // Summary
     console.log('\n' + line);
     console.log('🎉 All method tests completed successfully!\n');
     console.log('Methods tested:');
     console.log('  ✅ app() - Get app details');
+    console.log('  ✅ resolveAppId() - Resolve bundle ID to numeric track ID');
     console.log('  ✅ search() - Search for apps');
     console.log('  ✅ list() - Get curated lists');
     console.log('  ✅ developer() - Get developer apps');
@@ -223,6 +244,7 @@ async function testAllMethods() {
     console.log('  ✅ suggest() - Get search suggestions');
     console.log('  ✅ privacy() - Get privacy details');
     console.log('  ✅ versionHistory() - Get version history');
+    console.log('  ✅ appPageDetails() - Combined privacy, similar IDs, version history');
     console.log(line + '\n');
   } catch (error) {
     console.error('\n❌ Error occurred:', error);

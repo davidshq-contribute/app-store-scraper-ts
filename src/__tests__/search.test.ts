@@ -13,25 +13,28 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 });
 
 describe('search', () => {
-
   it('should throw error when term is missing', async () => {
-    await expect(
-      search({ term: '' })
-    ).rejects.toThrow('term is required');
+    await expect(search({ term: '' })).rejects.toThrow('term is required');
   });
 
   it('throws for invalid num or page (non-positive)', async () => {
     await expect(search({ term: 'x', num: 0 })).rejects.toThrow('num must be a positive integer');
     await expect(search({ term: 'x', page: 0 })).rejects.toThrow('page must be a positive integer');
-    await expect(search({ term: 'x', page: -1 })).rejects.toThrow('page must be a positive integer');
+    await expect(search({ term: 'x', page: -1 })).rejects.toThrow(
+      'page must be a positive integer'
+    );
   });
 
   it('throws for invalid device', async () => {
-    await expect(search({ term: 'x', device: 'invalid' as never })).rejects.toThrow('Invalid device: "invalid"');
+    await expect(search({ term: 'x', device: 'invalid' as never })).rejects.toThrow(
+      'Invalid device: "invalid"'
+    );
   });
 
   it('sends entity=software by default', async () => {
-    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify({ resultCount: 0, results: [] }));
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
     await search({ term: 'test' });
     const calls = vi.mocked(common.doRequest).mock.calls;
     const url = calls[calls.length - 1]?.[0] ?? '';
@@ -39,12 +42,16 @@ describe('search', () => {
   });
 
   it('sends entity from device option (iPad, Mac)', async () => {
-    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify({ resultCount: 0, results: [] }));
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
     await search({ term: 'test', device: device.IPAD });
     let calls = vi.mocked(common.doRequest).mock.calls;
     expect(calls[calls.length - 1]?.[0]).toContain('entity=iPadSoftware');
 
-    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify({ resultCount: 0, results: [] }));
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
     await search({ term: 'test', device: device.MAC });
     calls = vi.mocked(common.doRequest).mock.calls;
     expect(calls[calls.length - 1]?.[0]).toContain('entity=macSoftware');
@@ -62,9 +69,7 @@ describe('search', () => {
     };
 
     it('returns empty when requested page is beyond 200-item cap', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(
-        JSON.stringify(validSearchResponse)
-      );
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(validSearchResponse));
 
       // page 5, num 50 → offset 200, window 200–249; API returns at most 200 items → slice is empty
       const results = await search({ term: 'test', page: 5, num: 50 });
@@ -77,9 +82,7 @@ describe('search', () => {
     });
 
     it('returns at most 200 results when mock returns 200', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(
-        JSON.stringify(validSearchResponse)
-      );
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(validSearchResponse));
 
       const results = await search({ term: 'test', page: 1, num: 200 });
 
@@ -97,7 +100,7 @@ describe('search', () => {
     it('should search for apps with a valid term', { timeout: 10000 }, async () => {
       const results = await search({
         term: 'minecraft',
-        num: 5
+        num: 5,
       });
 
       expect(Array.isArray(results)).toBe(true);
@@ -113,7 +116,7 @@ describe('search', () => {
       const results = await search({
         term: 'minecraft',
         num: 5,
-        idsOnly: true
+        idsOnly: true,
       });
 
       expect(Array.isArray(results)).toBe(true);
@@ -125,13 +128,13 @@ describe('search', () => {
       const page1 = await search({
         term: 'game',
         num: 5,
-        page: 1
+        page: 1,
       });
 
       const page2 = await search({
         term: 'game',
         num: 5,
-        page: 2
+        page: 2,
       });
 
       expect(Array.isArray(page1)).toBe(true);

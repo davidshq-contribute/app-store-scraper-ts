@@ -1,6 +1,6 @@
 # Breaking changes (v3.0.0)
 
-This document summarizes breaking changes for consumers upgrading from v2.x to v3.0.0. For the full list of v3 changes (including non-breaking), see [CHANGELOG.md](../CHANGELOG.md).
+This document summarizes breaking changes for consumers upgrading from v2.x to v3.0.0. **Post-v3.0.0** breaking changes (fixes-3 branch) are listed in §11–12. For the full list of v3 changes (including non-breaking), see [CHANGELOG.md](../CHANGELOG.md).
 
 **Summary of major breaking changes**
 
@@ -10,14 +10,17 @@ This document summarizes breaking changes for consumers upgrading from v2.x to v
 | 2 | Errors | HTTP failures throw `HttpError`; do not rely on `error.message` text. |
 | 3 | Requests | 15s timeout by default; retries default to 0 (opt-in). |
 | 4 | Scores | Rating/review scores use 0 as sentinel; valid range 0–5 (no clamp to 1). |
-| 5 | Behavior | `similar()`, `app()` ratings, and `app()` screenshots rethrow non-404; screenshot URLs keep original format; no `console.warn` for search; **search() pagination fixed** (page &gt; 1 now returns results). |
+| 5 | Behavior | `similar()`, `app()` ratings, and `app()` screenshots rethrow non-404; `privacy()` and `versionHistory()` return empty on 404 (no longer throw); screenshot URLs keep original format; no `console.warn` for search; **search() pagination fixed** (page &gt; 1 now returns results). |
 | 6 | `ListApp` | `developerId` is number only; `developerIdNum` removed. |
 | 7 | `App.size` | Now number (bytes), was string. |
 | 8 | Genre IDs | `genreIds`, `primaryGenreId`, `ListApp.genreId` are numeric (were string). |
 | 9 | `contentRating` | Unknown is `''`, no longer defaulted to `'4+'`. |
-| 10 | Input validation | Invalid `country`, `collection`, `category`, `sort`, `num`, or `page` throw synchronous `Error` before any HTTP request. |
+| 10 | Input validation | Invalid `country`, `collection`, `category`, `sort`, `device`, `num`, or `page` throw synchronous `Error` before any HTTP request. |
+| 11 | `ratings()` | Histogram mismatch no longer `console.warn`; use `result.warnings` instead. |
+| 12 | `App.genreIds` | Value `0` is now filtered out (invalid per Apple); array never contains 0. |
+| 13 | Dependencies | Zod 4, cheerio 1.x, fast-xml-parser 5.x; see §13 for consumer impact. |
 
-**Silent breakage (JavaScript):** Items 1, 6, 7, 8 and 9 can **fail silently at runtime** for JavaScript consumers (TypeScript catches them at compile time). In particular, the **string → number** changes (#7, #8) produce **wrong results** instead of errors: e.g. `genreIds.includes('6014')` or `app.primaryGenreId === '6014'` silently return `false`. If you use this library from JavaScript, grep for `genreIds`, `primaryGenreId`, `genreId`, `size`, `contentRating`, and `developerIdNum` and update comparisons/defaults as in the sections below.
+**Silent breakage (JavaScript):** Items 1, 6, 7, 8, 9 and 12 can **fail silently at runtime** for JavaScript consumers (TypeScript catches them at compile time). In particular, the **string → number** changes (#7, #8) produce **wrong results** instead of errors: e.g. `genreIds.includes('6014')` or `app.primaryGenreId === '6014'` silently return `false`. Item 12: `genreIds.includes(0)` or `genreIds.indexOf(0) >= 0` will never be true. If you use this library from JavaScript, grep for `genreIds`, `primaryGenreId`, `genreId`, `size`, `contentRating`, and `developerIdNum` and update comparisons/defaults as in the sections below.
 
 ---
 
@@ -90,6 +93,7 @@ try {
 - **similar():** Only 404 is treated as "no similar apps"; other errors (timeout, 5xx, rate limit) are **rethrown**. Code that previously received an empty array on any failure will now get an exception unless the failure was 404.
 - **app() with ratings:** Only 404 (including ratings empty-body) from the ratings request is treated as "no histogram"; other errors are **rethrown**. Callers that relied on getting an app without histogram on timeout/5xx will now get an exception.
 - **app() with screenshots:** Only 404 from the screenshot request is treated as "no screenshots" (empty arrays); other errors (timeout, 5xx, parse) are rethrown.
+- **privacy() and versionHistory():** When the app page returns 404 (app not found), these now return **empty `{}` and `[]`** instead of throwing. Code that caught 404 to detect "app not found" must instead check for empty result (e.g. `Object.keys(privacy).length === 0` or `versionHistory.length === 0`).
 - **Screenshot URLs:** Original image format (webp/jpg/png) is preserved; PNG is no longer forced. **Migration:** If you assumed URLs always ended in `.png`, handle other extensions (e.g. `.webp`, `.jpg`).
 - **search():** The `console.warn` when `page * num > 200` was removed; the 200-result cap is unchanged. If you depended on that warning (e.g. in tests or logging), remove that assumption.
 - **search() pagination:** Previously, `search({ term, num: 50, page: 2 })` requested only `limit=50` from the API (first 50 results) then sliced for page 2, so page 2 and beyond always returned empty. v3.0 requests `limit=page * num` (e.g. 100 for page 2 with `num: 50`) and correctly returns results 50–99. This **fixes** broken pagination; code that relied on page &gt; 1 being empty, or tests asserting empty page-2 results, will see different behavior.
@@ -155,11 +159,50 @@ If you used genre IDs as strings elsewhere (e.g. `app.genreIds.map(id => ...)` o
 
 **v2.x:** Invalid options (e.g. `country: 'xx'`, `collection: 'invalid'`, out-of-range `num` or `page`) were passed through to Apple. You might get an HTTP error, empty results, or undefined behavior depending on the endpoint.
 
-**v3.0:** All public functions validate **`country`**, **`collection`**, **`category`**, **`sort`**, **`num`**, and **`page`** against allowlists (see `src/lib/validate.ts`). **Invalid values throw a synchronous `Error`** (e.g. `Error: Invalid country: "xx"`) **before any HTTP request**. This is a different code path from HTTP failures: validation errors are plain `Error`, not `HttpError`.
+**v3.0:** All public functions validate **`country`**, **`collection`**, **`category`**, **`sort`**, **`device`** (search only), **`num`**, and **`page`** against allowlists (see `src/lib/validate.ts`). **Invalid values throw a synchronous `Error`** (e.g. `Error: Invalid country: "xx"`, `Error: Invalid device: "..."`) **before any HTTP request**. This is a different code path from HTTP failures: validation errors are plain `Error`, not `HttpError`.
 
 **Impact:** Code that previously caught only HTTP/API errors may now receive validation errors earlier. For example, `list({ country: 'xx' })` no longer hits the network; it throws immediately. If you catch and retry or log "API errors", ensure validation errors are handled or rethrown as appropriate.
 
 **Migration:** Validate or sanitize user-supplied options before calling the library, or catch both `Error` (validation) and `HttpError` (HTTP) if you need to handle all failures in one place. Do not rely on invalid options being sent to Apple.
+
+---
+
+## 11. `ratings()` — histogram mismatch: no `console.warn`, use `result.warnings` (post-v3.0.0)
+
+**v3.0.0:** When the histogram bar sum did not match the total count (e.g. page structure change), `parseRatings()` logged a **`console.warn`** and still returned the parsed result.
+
+**Post-v3.0.0:** No side-effect logging. The `Ratings` result may include an optional **`warnings`** array (e.g. `["Ratings histogram sum (100) does not match total count (999). Data may be inconsistent."]`). Consumers control whether to log or handle these.
+
+**Migration:** If you relied on `console.warn` to detect histogram mismatches (e.g. in tests or monitoring), check `result.warnings` instead:
+
+```typescript
+const result = await ratings({ id: 123 });
+if (result.warnings?.length) {
+  console.warn(result.warnings.join('; '));
+}
+```
+
+---
+
+## 12. `App.genreIds` — value `0` no longer included (post-v3.0.0)
+
+**v3.0.0:** `genreIds` filtered out `NaN` only; `0` could appear if the API returned it.
+
+**Post-v3.0.0:** `genreIds` filters out **`0`** as well (Apple genre IDs are 6000+; 0 is invalid/unknown). Invalid strings now parse to 0 via `safeParseInt` and are filtered.
+
+**Migration:** If you treated `genreIds.includes(0)` or `genreIds.indexOf(0) >= 0` as "unknown genre", that will never be true now. Use `primaryGenreId === 0` or `genreIds.length === 0` for unknown/empty cases.
+
+---
+
+## 13. Dependencies — Zod 4, cheerio 1.x, fast-xml-parser 5.x
+
+**v3.0:** Runtime and dev dependencies were upgraded. The following may affect consumers:
+
+- **zod** ^4.1.12 (was 3.x): Zod 4 replaces `.passthrough()` with `z.looseObject()`; error customization APIs and type inference changed. The library's internal schemas have been migrated. **Impact:** If you use Zod directly (e.g. to validate or extend this library's responses) and are on Zod 3, you may need to upgrade to Zod 4 for compatibility. See [Zod v4 migration](https://zod.dev/v4/changelog).
+- **cheerio** ^1.2.0 (was 0.x): Major upgrade; API changes. **Impact:** Only relevant if you extend or re-export cheerio types, or depend on cheerio 0.x APIs in code that integrates with this library.
+- **fast-xml-parser** ^5.5.3: v5 has stricter XML parsing. **Impact:** The library uses it for RSS and iTunes responses; if Apple's XML format has edge cases, validation may behave differently. See the package changelog for v5 migration.
+
+**Migration:** Most consumers need no changes. If you validate responses with Zod 3, upgrade to Zod 4. If you integrate with cheerio or fast-xml-parser directly, check their migration guides.
 
 ---
 

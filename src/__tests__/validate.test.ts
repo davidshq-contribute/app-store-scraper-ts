@@ -9,14 +9,25 @@ import {
   validateListNum,
   validateSearchPagination,
 } from '../lib/validate.js';
+import { ValidationError } from '../lib/errors.js';
 import { collection, category, device, sort } from '../types/constants.js';
 
 describe('validate', () => {
-  it('throws clear error for invalid country, collection, category, or device (allowlist validation)', () => {
-    expect(() => validateCountry('xx')).toThrow('Invalid country: "xx"');
-    expect(() => validateCollection('invalid')).toThrow('Invalid collection: "invalid"');
-    expect(() => validateCategory(99999)).toThrow('Invalid category: 99999');
-    expect(() => validateDevice('invalid')).toThrow('Invalid device: "invalid"');
+  it('throws ValidationError for invalid country, collection, category, or device (allowlist validation)', () => {
+    expect(() => validateCountry('xx')).toThrow(ValidationError);
+    expect(() => validateCollection('invalid')).toThrow(ValidationError);
+    expect(() => validateCategory(99999)).toThrow(ValidationError);
+    expect(() => validateDevice('invalid')).toThrow(ValidationError);
+  });
+
+  it('includes field name on ValidationError', () => {
+    expect.assertions(2);
+    try {
+      validateCountry('xx');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('country');
+    }
   });
 
   describe('validateCountry', () => {
