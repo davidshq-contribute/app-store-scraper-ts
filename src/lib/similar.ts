@@ -39,11 +39,7 @@ export async function similar(
   options: SimilarOptions & { includeLinkType?: false }
 ): Promise<App[]>;
 export async function similar(options: SimilarOptions): Promise<SimilarApp[] | App[]> {
-  validateRequiredField(
-    options as Record<string, unknown>,
-    ['id', 'appId'],
-    'Either id or appId is required'
-  );
+  validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
   const {
     appId,

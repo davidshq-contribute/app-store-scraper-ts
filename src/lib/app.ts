@@ -151,11 +151,7 @@ async function scrapeScreenshots(
  * ```
  */
 export async function app(options: AppOptions): Promise<App> {
-  validateRequiredField(
-    options as Record<string, unknown>,
-    ['id', 'appId'],
-    'Either id or appId is required'
-  );
+  validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
   const {
     id,

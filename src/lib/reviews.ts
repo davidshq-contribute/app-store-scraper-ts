@@ -40,11 +40,7 @@ import { reviewsFeedSchema } from './schemas.js';
  * ```
  */
 export async function reviews(options: ReviewsOptions): Promise<Review[]> {
-  validateRequiredField(
-    options as Record<string, unknown>,
-    ['id', 'appId'],
-    'Either id or appId is required'
-  );
+  validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
   const {
     appId,

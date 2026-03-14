@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **validateRequiredField (CODE_SMELLS §2):** `validateRequiredField` in `src/lib/common.ts` now accepts a generic `<T extends object>` so callers can pass typed options without casting. Removed `options as Record<string, unknown>` from `app.ts`, `reviews.ts`, and `similar.ts`. List/suggest (CODE_SMELLS §1) already throw `ValidationError` with `field: 'response'` for API response validation.
+- **storeId fallback (CODE_SMELLS §4):** In `src/lib/common.ts`, `storeId()` now uses only `DEFAULT_STORE_FRONT_ID` as fallback when the country is unknown (removed redundant `markets.us` from the chain). The constant remains documented in `src/types/constants.ts` as the US store front.
 - **Type safety (CODE_SMELLS §3):** In `doRequest` catch block, use a `hasStatus` type guard instead of `(err as { status?: number }).status` for retry logic. In `parseRatings`, derive histogram star key via `STAR_KEYS[4 - index] ?? 1` instead of a type assertion.
 - **Constants:** Add `ITUNES_API_MAX_LIMIT` (200) and `BODY_PREVIEW_MAX_LEN` (200) in `src/types/constants.ts`; use in `search.ts`, `list.ts`, `validate.ts`, and `common.ts` to remove duplicate magic numbers (per docs/CODE_SMELLS.md §8).
 

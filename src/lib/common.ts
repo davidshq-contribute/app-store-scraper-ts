@@ -287,7 +287,7 @@ export async function resolveAppId(options: ResolveAppIdOptions): Promise<number
  */
 export function storeId(country: string): number {
   const id = markets[country.toLowerCase()];
-  return id || markets.us || DEFAULT_STORE_FRONT_ID;
+  return id ?? DEFAULT_STORE_FRONT_ID;
 }
 
 /**
@@ -300,15 +300,19 @@ export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
 
 /**
  * Validates that at least one of the required fields is present.
+ * @param options - Options object (typed generically so callers need not cast).
+ * @param fields - Field names to check; at least one must be present (non-null/undefined).
+ * @param errorMessage - Message for the thrown ValidationError when validation fails.
  * @throws {ValidationError} with field names joined by "/" (e.g. "id/appId")
  * @internal
  */
-export function validateRequiredField(
-  options: Record<string, unknown>,
+export function validateRequiredField<T extends object>(
+  options: T,
   fields: string[],
   errorMessage: string
 ): void {
-  const hasField = fields.some((field) => options[field] != null);
+  const opts = options as Record<string, unknown>;
+  const hasField = fields.some((field) => opts[field] != null);
   if (!hasField) {
     throw new ValidationError(errorMessage, fields.join('/'));
   }
