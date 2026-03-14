@@ -1,4 +1,4 @@
-# @perttu/app-store-scraper
+# @davidshq/app-store-scraper
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
@@ -19,7 +19,7 @@ This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https:
 **Requirements:** Node.js ≥20.
 
 ```bash
-npm install @perttu/app-store-scraper
+npm install @davidshq/app-store-scraper
 ```
 
 **Upgrading from v2.x?** v3 is a major release. The main change: `list()` now returns `ListApp[]` by default (one RSS request). To keep the previous behavior (full `App[]`), use `list({ fullDetail: true })`:
@@ -37,7 +37,7 @@ One-line change: add `{ fullDetail: true }` (or merge into your existing options
 ## Usage
 
 ```typescript
-import { app, search, list, reviews, collection, category } from '@perttu/app-store-scraper';
+import { app, search, list, reviews, collection, category } from '@davidshq/app-store-scraper';
 
 // Get app details
 const appData = await app({ id: 553834731 });
@@ -63,7 +63,7 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 Methods throw `HttpError` (extends `Error`) on non-OK responses. Use `instanceof HttpError` and `err.status` to branch on specific status codes instead of parsing the message:
 
 ```typescript
-import { app, HttpError } from '@perttu/app-store-scraper';
+import { app, HttpError } from '@davidshq/app-store-scraper';
 
 try {
   const appData = await app({ id: 123 });
@@ -116,6 +116,21 @@ Only supported values are accepted for `country`, `collection`, `category`, `dev
 
 Most methods accept a `requestOptions` object (see `RequestOptions` in the types). **Supported:** `headers` (custom headers merged with defaults), `timeoutMs` (request timeout in ms; default 15000), `retries` (number of retries for 429/503/network/timeout errors with exponential backoff; default 0 — opt-in; set e.g. 2 to enable). With retries enabled, total wait on repeated timeouts can be up to `timeoutMs * (1 + retries)` plus backoff. Each request is independent: other concurrent calls (e.g. other crawls) are not blocked.
 
+**User-Agent override:** The library sends a default User-Agent (Chrome-based) that may age over time and trigger bot detection. You can override it via `requestOptions.headers`:
+
+```typescript
+const appData = await app({
+  id: 553834731,
+  requestOptions: {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    },
+  },
+});
+```
+
+Custom headers are merged over the defaults, so passing `User-Agent` replaces the built-in value.
+
 ## Development
 
 ```bash
@@ -154,6 +169,7 @@ npm run format
 
 - [BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) – Upgrade guide and breaking changes (e.g. v2 → v3).
 - [DEV-DECISIONS.md](docs/DEV-DECISIONS.md) – Design decisions (APIs vs scraping, DOM-dependent methods, etc.).
+- [EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md](docs/EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md) – Device permissions, rating histogram aria-labels, and MZStore vs public API comparison.
 - [POSTPONED.md](docs/POSTPONED.md) – Deferred enhancements and known limitations.
 - [CHANGELOG.md](CHANGELOG.md) – Release history.
 

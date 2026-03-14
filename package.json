@@ -1,5 +1,5 @@
 {
-  "name": "@perttu/app-store-scraper",
+  "name": "@davidshq/app-store-scraper",
   "version": "3.0.0",
   "description": "Modern TypeScript library to scrape application data from the iTunes/Mac App Store",
   "type": "module",
@@ -42,12 +42,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/plahteenlahti/app-store-scraper.git"
+    "url": "git+https://github.com/davidshq-contribute/app-store-scraper-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/plahteenlahti/app-store-scraper/issues"
+    "url": "https://github.com/davidshq-contribute/app-store-scraper-ts/issues"
   },
-  "homepage": "https://github.com/plahteenlahti/app-store-scraper#readme",
+  "homepage": "https://github.com/davidshq-contribute/app-store-scraper-ts#readme",
   "keywords": [
     "app-store",
     "itunes",

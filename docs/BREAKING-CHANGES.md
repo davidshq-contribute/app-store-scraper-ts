@@ -54,7 +54,7 @@ const apps: ListApp[] = await list({ collection: collection.TOP_FREE_IOS });
 **v3.0:** All HTTP failures from `doRequest()` throw an **`HttpError`** (extends `Error`) with `status` and optional `url`. **`ratings()`** throws `HttpError` when the ratings response body is empty: **`status: 204`** (No Content), message `"No ratings data returned"` — so "no data" is distinct from real HTTP 404. **String matching on `error.message` is no longer supported** — the message text may change. Use `err instanceof HttpError && err.status === 404` for 404, and `err.status === 204` for empty-body cases (e.g. ratings).
 
 ```typescript
-import { app, HttpError } from '@perttu/app-store-scraper';
+import { app, HttpError } from '@davidshq/app-store-scraper';
 
 try {
   await app({ id: 123 });

@@ -1,5 +1,5 @@
 /**
- * @perttu/app-store-scraper
+ * @davidshq/app-store-scraper
  *
  * Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
  * This is a complete TypeScript rewrite of facundoolano/app-store-scraper with full
@@ -23,7 +23,7 @@
  *
  * @example
  * ```ts
- * import { app, search, list, HttpError } from '@perttu/app-store-scraper';
+ * import { app, search, list, HttpError } from '@davidshq/app-store-scraper';
  * const appData = await app({ id: 553834731 });
  * const results = await search({ term: 'minecraft', num: 10 });
  * ```

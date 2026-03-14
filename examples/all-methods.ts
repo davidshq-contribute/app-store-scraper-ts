@@ -1,5 +1,5 @@
 /**
- * Comprehensive test of all @perttu/app-store-scraper methods
+ * Comprehensive test of all @davidshq/app-store-scraper methods
  * Run with: npx tsx examples/all-methods.ts
  */
 
@@ -34,7 +34,7 @@ const TEST_BUNDLE_ID = 'com.midasplayer.apps.candycrushsaga';
 const line = '-'.repeat(60);
 
 async function testAllMethods() {
-  console.log('🧪 Testing all @perttu/app-store-scraper methods\n');
+  console.log('🧪 Testing all @davidshq/app-store-scraper methods\n');
   console.log(line);
 
   try {
