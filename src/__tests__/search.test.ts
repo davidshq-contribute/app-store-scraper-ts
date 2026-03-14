@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { search } from '../lib/search.js';
 import { device } from '../types/constants.js';
 import { runIntegrationTests } from './integration.js';
@@ -13,6 +13,10 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 });
 
 describe('search', () => {
+  beforeEach(() => {
+    vi.mocked(common.doRequest).mockReset();
+  });
+
   it('should throw error when term is missing', async () => {
     await expect(search({ term: '' })).rejects.toThrow('term is required');
   });
@@ -148,6 +152,60 @@ describe('search', () => {
     expect(app).not.toHaveProperty('trackId');
     expect(app).not.toHaveProperty('trackName');
     expect(app).not.toHaveProperty('bundleId');
+  });
+
+  it('passes lang parameter when provided', async () => {
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
+    await search({ term: 'test', lang: 'en' });
+    const url = vi.mocked(common.doRequest).mock.calls[0]![0];
+    expect(url).toContain('lang=en');
+  });
+
+  it('does not include lang parameter when not provided', async () => {
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
+    await search({ term: 'test' });
+    const url = vi.mocked(common.doRequest).mock.calls[0]![0];
+    expect(url).not.toContain('lang=');
+  });
+
+  it('throws ValidationError when API response fails schema validation', async () => {
+    // Missing required resultCount (number) — triggers schema failure
+    vi.mocked(common.doRequest).mockResolvedValueOnce('{"bad": true}');
+
+    await expect(search({ term: 'test' })).rejects.toThrow(
+      'Search API response validation failed'
+    );
+  });
+
+  it('includes media=software in URL', async () => {
+    vi.mocked(common.doRequest).mockResolvedValueOnce(
+      JSON.stringify({ resultCount: 0, results: [] })
+    );
+    await search({ term: 'test' });
+    const url = vi.mocked(common.doRequest).mock.calls[0]![0];
+    expect(url).toContain('media=software');
+  });
+
+  it('filters out non-software results (wrapperType=artist)', async () => {
+    const rawResponse = {
+      resultCount: 3,
+      results: [
+        { kind: 'software', trackId: 111, trackName: 'App', bundleId: 'com.a' },
+        { wrapperType: 'artist', artistId: 999, artistName: 'Some Artist' },
+        { wrapperType: 'software', trackId: 222, trackName: 'App B', bundleId: 'com.b' },
+      ],
+    };
+    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rawResponse));
+
+    const results = await search({ term: 'test', num: 10 });
+
+    expect(results).toHaveLength(2);
+    expect(results[0]!.id).toBe(111);
+    expect(results[1]!.id).toBe(222);
   });
 
   describe('pagination cap (BUG-3)', () => {

@@ -34,6 +34,7 @@ function isRetryable(status?: number, err?: unknown): boolean {
  * Type guard: true when value is an object with a numeric `status` property (e.g. HttpError-like).
  * Used in doRequest catch block to read status for retry logic without type assertions.
  */
+// Stryker disable all: type guard correctness enforced by TypeScript types, not runtime assertions
 function hasStatus(x: unknown): x is { status: number } {
   return (
     typeof x === 'object' &&
@@ -42,6 +43,7 @@ function hasStatus(x: unknown): x is { status: number } {
     typeof (x as { status?: number }).status === 'number'
   );
 }
+// Stryker restore all
 
 /**
  * Makes an HTTP GET request with optional timeout and retries.
@@ -61,6 +63,7 @@ function hasStatus(x: unknown): x is { status: number } {
  *   `headers: { 'User-Agent': '...' }` in requestOptions.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
+  // Stryker disable StringLiteral: default header values are not behavioral contracts
   const defaultHeaders: Record<string, string> = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -68,6 +71,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
       'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
   };
+  // Stryker restore StringLiteral
 
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {

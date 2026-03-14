@@ -70,6 +70,14 @@ describe('parseRatings', () => {
     expect(result.histogram[1]).toBe(0);
   });
 
+  it('does not warn when totalRatings is 0 (even if histogram has values)', () => {
+    // totalRatings = 0, bars sum to 5; mismatch check uses totalRatings > 0 so no warning
+    const html = fixtureHtml(0, 1, 1, 1, 1, 1);
+    const result = parseRatings(html);
+    expect(result.ratings).toBe(0);
+    expect(result.warnings).toBeUndefined();
+  });
+
   it('parses total from .rating-count and handles missing count', () => {
     const htmlNoCount = '<div><span class="vote"><span class="total">1</span></span></div>';
     const result = parseRatings(htmlNoCount);
@@ -107,6 +115,39 @@ describe('ratings()', () => {
     );
     expect(err).toBeInstanceOf(ValidationError);
     expect((err as Error).message).toBe('id is required');
+  });
+
+  it('passes X-Apple-Store-Front header with correct storefront', async () => {
+    const html = fixtureHtml(10, 2, 2, 2, 2, 2);
+    vi.mocked(common.doRequest).mockResolvedValue(html);
+
+    await ratings({ id: 123, country: 'us' });
+
+    expect(common.doRequest).toHaveBeenCalledWith(
+      expect.stringContaining('customer-reviews/id123'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Apple-Store-Front': expect.stringContaining('143441'),
+        }),
+      })
+    );
+  });
+
+  it('passes custom requestOptions headers merged with store front', async () => {
+    const html = fixtureHtml(10, 2, 2, 2, 2, 2);
+    vi.mocked(common.doRequest).mockResolvedValue(html);
+
+    await ratings({ id: 123, country: 'us', requestOptions: { headers: { 'X-Custom': 'test' } } });
+
+    expect(common.doRequest).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Apple-Store-Front': expect.stringContaining('143441'),
+          'X-Custom': 'test',
+        }),
+      })
+    );
   });
 
   it('throws HttpError with status 200 and RATINGS_EMPTY_MESSAGE when response body is empty', async () => {

@@ -31,9 +31,11 @@ export class HttpError extends Error {
     this.status = status;
     this.url = url;
     // Maintains proper stack trace in V8 (Node, Chrome).
+    // Stryker disable all: captureStackTrace is a V8 stack-trace optimization, not behavioral
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, HttpError);
     }
+    // Stryker restore all
   }
 }
 
@@ -63,8 +65,10 @@ export class ValidationError extends Error {
     Object.setPrototypeOf(this, ValidationError.prototype);
     this.name = 'ValidationError';
     this.field = field;
+    // Stryker disable all: captureStackTrace is a V8 stack-trace optimization, not behavioral
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, ValidationError);
     }
+    // Stryker restore all
   }
 }

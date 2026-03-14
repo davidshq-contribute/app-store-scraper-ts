@@ -182,6 +182,33 @@ describe('similar', () => {
       ).rejects.toThrow(/Could not resolve app id "com.nonexistent.app": Bundle not found/);
     });
 
+    it('error wrapping preserves cause', async () => {
+      const originalError = new Error('Bundle not found');
+      vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
+
+      const err = await similar({ appId: 'com.test', country: DEFAULT_COUNTRY }).catch((e) => e);
+      expect(err.cause).toBe(originalError);
+    });
+
+    it('filters undefined apps from lookup when some IDs are not found (includeLinkType: false)', async () => {
+      const html = `
+        <body>
+          <h2>Customers Also Bought</h2>
+          <a href="https://apps.apple.com/us/app/foo/id111">App 1</a>
+          <a href="https://apps.apple.com/us/app/bar/id222">App 2</a>
+        </body>
+      `;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      // lookup returns only 1 of the 2 requested apps
+      vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(111, 'App 1')]);
+
+      const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
+
+      // App 222 was not found by lookup, so it should be filtered out
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe(111);
+    });
+
     it('returns plain App[] when includeLinkType is false (default)', async () => {
       const html = `
         <body>

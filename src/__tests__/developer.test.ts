@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { developer } from '../lib/developer.js';
+import { ValidationError } from '../lib/errors.js';
 import { runIntegrationTests } from './integration.js';
 
 describe('developer', () => {
@@ -8,6 +9,40 @@ describe('developer', () => {
       // @ts-expect-error intentional: test runtime validation of invalid options
       developer({})
     ).rejects.toThrow('devId is required');
+  });
+
+  it('throws ValidationError with field "devId" when devId is missing', async () => {
+    const err = await developer({} as Parameters<typeof developer>[0]).catch((e) => e);
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as ValidationError).field).toBe('devId');
+  });
+
+  it('calls lookup with artistId field', async () => {
+    const originalFetch = globalThis.fetch;
+    const lookupResponse = {
+      resultCount: 1,
+      results: [
+        { kind: 'software', trackId: 100, bundleId: 'com.test', artistId: 12345 },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(JSON.stringify(lookupResponse)),
+    }) as typeof fetch;
+
+    try {
+      await developer({ devId: 12345 });
+      // artistId should map to 'id' param in URL (not 'artistId')
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/itunes\.apple\.com\/lookup\?.*id=12345/),
+        expect.any(Object)
+      );
+      // Should also contain entity=software
+      const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(url).toContain('entity=software');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {

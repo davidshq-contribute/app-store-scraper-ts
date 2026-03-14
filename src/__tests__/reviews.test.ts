@@ -20,6 +20,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 describe('reviews', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.resolveAppId).mockReset();
   });
 
   it('should throw error when neither id nor appId is provided', async () => {
@@ -142,6 +143,23 @@ describe('reviews', () => {
         'Could not resolve app id "com.nonexistent.app": App not found'
       );
     });
+  });
+
+  it('throws ValidationError when API response fails schema validation', async () => {
+    // feed must be an object (or undefined), not a string — triggers schema failure
+    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify({ feed: 'not an object' }));
+
+    await expect(reviews({ id: 553834731 })).rejects.toThrow(
+      'Reviews API response validation failed'
+    );
+  });
+
+  it('reviews error wrapping preserves cause', async () => {
+    const originalError = new Error('App not found');
+    vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
+
+    const err = await reviews({ appId: 'com.test', page: 1 } as Parameters<typeof reviews>[0]).catch((e) => e);
+    expect(err.cause).toBe(originalError);
   });
 
   describe('score parsing (BUG-1)', () => {

@@ -9,6 +9,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     doRequest: vi.fn(),
+    lookup: vi.fn(),
   };
 });
 
@@ -24,6 +25,7 @@ describe('list', () => {
   describe('fixture-based (no network)', () => {
     beforeEach(() => {
       vi.mocked(common.doRequest).mockReset();
+      vi.mocked(common.lookup).mockReset();
     });
 
     it('returns ListApp[] from minimal RSS fixture and exercises parseEntryLink/parseDeveloperIdFromHref', async () => {
@@ -379,6 +381,182 @@ describe('list', () => {
       expect(results).toHaveLength(1);
       expect(results[0]!.developerId).toBe(284882218);
     });
+
+    it('returns ListApp with paid app (free=false, correct price)', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '42', 'im:bundleId': 'com.paid.app' } },
+              'im:name': { label: 'Paid App' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [
+                { attributes: { href: 'https://apps.apple.com/us/app/x/id42', rel: 'alternate' } },
+              ],
+              'im:price': { attributes: { amount: '2.99', currency: 'EUR' } },
+              summary: { label: 'A paid app' },
+              'im:artist': {
+                label: 'Dev',
+                attributes: { href: 'https://apps.apple.com/us/developer/x/id1' },
+              },
+              category: { attributes: { label: 'Productivity', 'im:id': '6007' } },
+              'im:releaseDate': { label: '2024-06-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.price).toBe(2.99);
+      expect(results[0]!.currency).toBe('EUR');
+      expect(results[0]!.free).toBe(false);
+    });
+
+    it('fullDetail=true extracts IDs from entries, calls lookup, returns App[]', async () => {
+      const rssData = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '111', 'im:bundleId': 'com.a' } },
+              'im:name': { label: 'A' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/a/id111', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+            {
+              id: { attributes: { 'im:id': '222', 'im:bundleId': 'com.b' } },
+              'im:name': { label: 'B' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/b/id222', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+
+      // doRequest returns RSS feed
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rssData));
+      // lookup is called with extracted IDs and returns full App objects
+      const fakeApps = [
+        { id: 111, appId: 'com.a', title: 'App A', screenshots: [] },
+        { id: 222, appId: 'com.b', title: 'App B', screenshots: [] },
+      ];
+      vi.mocked(common.lookup).mockResolvedValueOnce(fakeApps as never);
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        fullDetail: true,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(2);
+      expect(results[0]!).toHaveProperty('screenshots'); // Full App shape
+      expect(results[0]!.id).toBe(111);
+      expect(results[1]!.id).toBe(222);
+      // doRequest called once for RSS, lookup called once for full details
+      expect(common.doRequest).toHaveBeenCalledTimes(1);
+      expect(common.lookup).toHaveBeenCalledTimes(1);
+      expect(common.lookup).toHaveBeenCalledWith(
+        [111, 222], 'id', DEFAULT_COUNTRY, undefined, undefined
+      );
+    });
+
+    it('fullDetail=true returns empty when all entry IDs are invalid', async () => {
+      const rssData = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:bundleId': 'com.noid' } },
+              'im:name': { label: 'No ID' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rssData));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        fullDetail: true,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toEqual([]);
+      // Only RSS feed request, no lookup since no valid IDs
+      expect(common.doRequest).toHaveBeenCalledTimes(1);
+      expect(common.lookup).not.toHaveBeenCalled();
+    });
+
+    it('list entry with missing optional fields falls back to empty strings', async () => {
+      const rssData = {
+        feed: {
+          entry: [
+            {
+              // Must have im:id to not be null-filtered
+              id: { attributes: { 'im:id': '1' } },
+              // All other fields missing
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rssData));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      const app = results[0]!;
+      expect(app.id).toBe(1);
+      expect(app.appId).toBe('');
+      expect(app.title).toBe('');
+      expect(app.description).toBe('');
+      expect(app.developer).toBe('');
+      expect(app.developerUrl).toBe('');
+      expect(app.icon).toBe('');
+      expect(app.genre).toBe('');
+      expect(app.released).toBe('');
+      expect(app.url).toBe('');
+      expect(app.price).toBe(0);
+      expect(app.free).toBe(true);
+      expect(app.currency).toBe('USD');
+      expect(app.developerId).toBe(0);
+      expect(app.genreId).toBe(0);
+    });
+
+    it('throws ValidationError when RSS response fails schema validation', async () => {
+      // feed must be an object (or undefined), not a string — this triggers schema failure
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify({ feed: 'not an object' }));
+
+      await expect(
+        list({ collection: collection.TOP_FREE_IOS, num: 10, country: DEFAULT_COUNTRY })
+      ).rejects.toThrow('List API response validation failed');
+    });
   });
 
   describe('allowlist validation', () => {
@@ -410,6 +588,7 @@ describe('list', () => {
     beforeAll(async () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
       vi.mocked(common.doRequest).mockImplementation(actual.doRequest);
+      vi.mocked(common.lookup).mockImplementation(actual.lookup);
     });
 
     it('returns ListApp[] when fullDetail is false (default)', { timeout: 10000 }, async () => {
