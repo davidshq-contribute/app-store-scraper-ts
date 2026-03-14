@@ -40,7 +40,7 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   const validationResult = suggestResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(`Suggest API response validation failed: ${validationResult.error.message}`);
+    throw new ValidationError(`Suggest API response validation failed: ${validationResult.error.message}`, 'response');
   }
 
   const result = validationResult.data;

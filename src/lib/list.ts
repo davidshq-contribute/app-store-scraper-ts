@@ -1,7 +1,12 @@
 import type { App, ListApp } from '../types/app.js';
 import type { ListOptions } from '../types/options.js';
-import { collection as collectionConstants, DEFAULT_COUNTRY } from '../types/constants.js';
+import {
+  collection as collectionConstants,
+  DEFAULT_COUNTRY,
+  ITUNES_API_MAX_LIMIT,
+} from '../types/constants.js';
 import { doRequest, lookup, ensureArray, parseJson } from './common.js';
+import { ValidationError } from './errors.js';
 import {
   validateCountry,
   validateCollection,
@@ -121,7 +126,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   if (category != null) validateCategory(category);
   validateListNum(num);
 
-  const limit = Math.min(num, 200);
+  const limit = Math.min(num, ITUNES_API_MAX_LIMIT);
 
   let url = `https://itunes.apple.com/${country}/rss/${collection}`;
   if (category != null) {
@@ -134,7 +139,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   const validationResult = rssFeedSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(`List API response validation failed: ${validationResult.error.message}`);
+    throw new ValidationError(`List API response validation failed: ${validationResult.error.message}`, 'response');
   }
 
   const data = validationResult.data;

@@ -1,5 +1,10 @@
 import type { App } from '../types/app.js';
-import { DEFAULT_COUNTRY, markets } from '../types/constants.js';
+import {
+  BODY_PREVIEW_MAX_LEN,
+  DEFAULT_COUNTRY,
+  DEFAULT_STORE_FRONT_ID,
+  markets,
+} from '../types/constants.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
 import { HttpError, ValidationError } from './errors.js';
@@ -26,6 +31,19 @@ function isRetryable(status?: number, err?: unknown): boolean {
 }
 
 /**
+ * Type guard: true when value is an object with a numeric `status` property (e.g. HttpError-like).
+ * Used in doRequest catch block to read status for retry logic without type assertions.
+ */
+function hasStatus(x: unknown): x is { status: number } {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    'status' in x &&
+    typeof (x as { status?: number }).status === 'number'
+  );
+}
+
+/**
  * Makes an HTTP GET request with optional timeout and retries.
  * On non-OK response, throws an {@link HttpError} (extends Error) with `status` and optional `url`
  * so consumers can match on `error.status === 404` instead of parsing the message.
@@ -38,6 +56,9 @@ function isRetryable(status?: number, err?: unknown): boolean {
  *   With retries enabled, total wait on repeated timeouts can be up to `timeoutMs * (1 + retries)` plus backoff.
  * - Each request is independent: other concurrent calls (e.g. other crawls) are not blocked; only the call
  *   that made the request blocks until it completes or times out.
+ * - Default headers (User-Agent, Accept, Accept-Language) are merged with `requestOptions.headers`; custom
+ *   headers override defaults. To avoid bot detection when the default User-Agent ages, pass
+ *   `headers: { 'User-Agent': '...' }` in requestOptions.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   const defaultHeaders: Record<string, string> = {
@@ -89,10 +110,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
       return await response.text();
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      const status =
-        err && typeof err === 'object' && 'status' in err
-          ? (err as { status?: number }).status
-          : undefined;
+      const status = hasStatus(err) ? err.status : undefined;
       if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
         const delayMs = 1000 * 2 ** attempt;
         await new Promise((r) => setTimeout(r, delayMs));
@@ -121,7 +139,8 @@ export function parseJson(body: string, context?: { status?: number }): unknown 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const statusPart = context?.status != null ? ` (status ${context.status})` : '';
-    const bodyPreview = body.length > 200 ? `${body.slice(0, 200)}...` : body;
+    const bodyPreview =
+      body.length > BODY_PREVIEW_MAX_LEN ? `${body.slice(0, BODY_PREVIEW_MAX_LEN)}...` : body;
     throw new Error(`Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`);
   }
 }
@@ -136,7 +155,10 @@ export function parseJson(body: string, context?: { status?: number }): unknown 
  */
 export function safeParseInt(value: unknown, fallback = 0): number {
   if (value == null) return fallback;
-  const n = parseInt(typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '', 10);
+  const n = parseInt(
+    typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '',
+    10
+  );
   return Number.isNaN(n) ? fallback : n;
 }
 
@@ -191,6 +213,7 @@ export type LookupId = number | number[] | string | string[];
 /**
  * Looks up apps by ID, bundle ID, or artist ID from iTunes API.
  * Accepts numeric IDs for `id` / `artistId` and string IDs for `bundleId`.
+ * @throws {ValidationError} when the iTunes API response fails schema validation (field: `'response'`)
  */
 export async function lookup(
   ids: LookupId,
@@ -223,7 +246,10 @@ export async function lookup(
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(`iTunes API response validation failed: ${validationResult.error.message}`);
+    throw new ValidationError(
+      `iTunes API response validation failed: ${validationResult.error.message}`,
+      'response'
+    );
   }
 
   const response = validationResult.data;
@@ -261,7 +287,7 @@ export async function resolveAppId(options: ResolveAppIdOptions): Promise<number
  */
 export function storeId(country: string): number {
   const id = markets[country.toLowerCase()];
-  return id || markets.us || 143441;
+  return id || markets.us || DEFAULT_STORE_FRONT_ID;
 }
 
 /**
