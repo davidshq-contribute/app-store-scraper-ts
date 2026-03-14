@@ -56,11 +56,14 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
   let { id } = options;
 
   // If appId is provided, resolve to id first (lightweight lookup only)
-  if (appId && id == null) {
+  if (appId != null && id == null) {
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      throw new Error(`Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      throw new Error(
+        `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
     }
   }
 

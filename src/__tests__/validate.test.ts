@@ -20,13 +20,26 @@ describe('validate', () => {
     expect(() => validateDevice('invalid')).toThrow(ValidationError);
   });
 
-  it('includes field name on ValidationError', () => {
-    expect.assertions(2);
-    try {
-      validateCountry('xx');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ValidationError);
-      expect((err as ValidationError).field).toBe('country');
+  it('includes field name on ValidationError for each validator', () => {
+    const cases: Array<[fn: () => void, expectedField: string]> = [
+      [() => validateCountry('xx'), 'country'],
+      [() => validateCollection('invalid'), 'collection'],
+      [() => validateCategory(99999), 'category'],
+      [() => validateDevice('invalid'), 'device'],
+      [() => validateSort('invalid'), 'sort'],
+      [() => validateReviewsPage(0), 'page'],
+      [() => validateListNum(0), 'num'],
+      [() => validateSearchPagination(0, 1), 'num'],
+      [() => validateSearchPagination(1, 0), 'page'],
+    ];
+    expect.assertions(cases.length * 2);
+    for (const [fn, expectedField] of cases) {
+      try {
+        fn();
+      } catch (err) {
+        expect(err).toBeInstanceOf(ValidationError);
+        expect((err as ValidationError).field).toBe(expectedField);
+      }
     }
   });
 

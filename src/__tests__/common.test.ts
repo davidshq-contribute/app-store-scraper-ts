@@ -8,7 +8,9 @@ import {
   doRequest,
   safeParseInt,
   lookup,
+  appPageUrl,
 } from '../lib/common.js';
+import { HttpError } from '../lib/errors.js';
 
 /** Minimal iTunes lookup JSON so lookup() returns one app with the given trackId. */
 function minimalLookupJson(trackId: number): string {
@@ -19,6 +21,15 @@ function minimalLookupJson(trackId: number): string {
 }
 
 describe('common utilities', () => {
+  describe('appPageUrl', () => {
+    it('builds exact App Store app page URL format', () => {
+      expect(appPageUrl('us', 553834731)).toBe(
+        'https://apps.apple.com/us/app/id553834731'
+      );
+      expect(appPageUrl('gb', 1)).toBe('https://apps.apple.com/gb/app/id1');
+    });
+  });
+
   describe('safeParseInt', () => {
     it('parses valid numbers and strings', () => {
       expect(safeParseInt(42)).toBe(42);
@@ -29,13 +40,16 @@ describe('common utilities', () => {
     it('returns fallback for NaN', () => {
       expect(safeParseInt('abc')).toBe(0);
       expect(safeParseInt('abc', 99)).toBe(99);
+      expect(safeParseInt('xyz', 42)).toBe(42);
       expect(safeParseInt(null)).toBe(0);
       expect(safeParseInt(undefined)).toBe(0);
     });
 
     it('returns custom fallback for nullish inputs', () => {
-      expect(safeParseInt(null, 99)).toBe(99);
-      expect(safeParseInt(undefined, 99)).toBe(99);
+      const nullResult = safeParseInt(null, 99);
+      const undefinedResult = safeParseInt(undefined, 99);
+      expect(nullResult).toBe(99);
+      expect(undefinedResult).toBe(99);
     });
   });
 
@@ -71,12 +85,14 @@ describe('common utilities', () => {
     });
 
     it('should return US store ID for unknown country', () => {
-      expect(storeId('xx')).toBe(143441);
+      const id = storeId('xx');
+      expect(id).toBe(143441);
     });
 
     it('should handle case-insensitive country codes', () => {
       expect(storeId('US')).toBe(143441);
       expect(storeId('Us')).toBe(143441);
+      expect(storeId('gb')).toBe(143444);
     });
   });
 
@@ -86,7 +102,10 @@ describe('common utilities', () => {
     });
 
     it('should return empty array for null', () => {
-      expect(ensureArray(null)).toEqual([]);
+      const result = ensureArray(null);
+      expect(result).toEqual([]);
+      expect(result).toStrictEqual([]);
+      expect(result).toHaveLength(0);
     });
 
     it('should wrap single value in array', () => {
@@ -96,7 +115,9 @@ describe('common utilities', () => {
 
     it('should return array as-is', () => {
       const arr = [1, 2, 3];
-      expect(ensureArray(arr)).toBe(arr);
+      const result = ensureArray(arr);
+      expect(result).toBe(arr);
+      expect(result).toEqual([1, 2, 3]);
     });
   });
 
@@ -141,13 +162,72 @@ describe('common utilities', () => {
     });
   });
 
-  describe('lookup cleanApp parsing', () => {
+  describe('lookup', () => {
     const originalFetch = globalThis.fetch;
     beforeEach(() => {
       globalThis.fetch = originalFetch;
     });
     afterEach(() => {
       globalThis.fetch = originalFetch;
+    });
+
+    it('builds lookup URL with bundleId parameter when idField is bundleId', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              resultCount: 1,
+              results: [{ kind: 'software', trackId: 1, bundleId: 'com.test' }],
+            })
+          ),
+      }) as typeof fetch;
+      await lookup('com.test.app', 'bundleId', 'us');
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/itunes\.apple\.com\/lookup\?.*bundleId=com\.test\.app/),
+        expect.any(Object)
+      );
+    });
+
+    it('builds lookup URL with id parameter when idField is id or artistId', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              resultCount: 1,
+              results: [{ kind: 'software', trackId: 553834731 }],
+            })
+          ),
+      }) as typeof fetch;
+      await lookup(553834731, 'id', 'gb');
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/itunes\.apple\.com\/lookup\?.*id=553834731/),
+        expect.any(Object)
+      );
+      vi.mocked(fetch).mockClear();
+      await lookup(12345, 'artistId', 'us');
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/itunes\.apple\.com\/lookup\?.*id=12345/),
+        expect.any(Object)
+      );
+    });
+
+    it('includes entity=software and country in URL', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              resultCount: 1,
+              results: [{ kind: 'software', trackId: 1 }],
+            })
+          ),
+      }) as typeof fetch;
+      await lookup(1, 'id', 'jp');
+      const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      expect(url).toContain('entity=software');
+      expect(url).toContain('country=jp');
     });
 
     it('parses genreIds, primaryGenreId, size via safeParseInt', async () => {
@@ -173,6 +253,243 @@ describe('common utilities', () => {
       expect(apps[0]!.genreIds).toEqual([6014, 6001]); // 0 filtered (Apple genre IDs are 6000+)
       expect(apps[0]!.primaryGenreId).toBe(6014);
       expect(apps[0]!.size).toBe(1024);
+    });
+
+    it('maps all cleanApp fields from full iTunes API response', async () => {
+      const fullApp = {
+        kind: 'software',
+        trackId: 553834731,
+        bundleId: 'com.midasplayer.apps.candycrushsaga',
+        trackName: 'Candy Crush Saga',
+        trackViewUrl: 'https://apps.apple.com/app/id553834731',
+        description: 'Match candies to progress.',
+        artworkUrl512: 'https://is1-ssl.mzstatic.com/512.png',
+        artworkUrl100: 'https://is1-ssl.mzstatic.com/100.png',
+        genres: ['Games', 'Puzzle'],
+        genreIds: [6014, 7012],
+        primaryGenreName: 'Games',
+        primaryGenreId: 6014,
+        contentAdvisoryRating: '4+',
+        languageCodesISO2A: ['en', 'es'],
+        fileSizeBytes: '256000000',
+        minimumOsVersion: '12.0',
+        releaseDate: '2012-11-14T08:00:00Z',
+        currentVersionReleaseDate: '2025-01-15T12:00:00Z',
+        releaseNotes: 'Bug fixes.',
+        version: '1.2.3',
+        price: 0,
+        currency: 'USD',
+        artistId: 284882215,
+        artistName: 'King',
+        artistViewUrl: 'https://apps.apple.com/developer/king/id284882215',
+        sellerUrl: 'https://king.com',
+        averageUserRating: 4.5,
+        userRatingCount: 1000000,
+        averageUserRatingForCurrentVersion: 4.6,
+        userRatingCountForCurrentVersion: 500000,
+        screenshotUrls: ['https://example.com/s1.png'],
+        ipadScreenshotUrls: ['https://example.com/ipad1.png'],
+        appletvScreenshotUrls: [],
+        supportedDevices: ['iPhone', 'iPad'],
+      };
+      const json = JSON.stringify({ resultCount: 1, results: [fullApp] });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(json),
+      }) as typeof fetch;
+      const apps = await lookup(553834731, 'id');
+      expect(apps).toHaveLength(1);
+      const app = apps[0]!;
+      expect(app.id).toBe(553834731);
+      expect(app.appId).toBe('com.midasplayer.apps.candycrushsaga');
+      expect(app.title).toBe('Candy Crush Saga');
+      expect(app.url).toBe('https://apps.apple.com/app/id553834731');
+      expect(app.description).toBe('Match candies to progress.');
+      expect(app.icon).toBe('https://is1-ssl.mzstatic.com/512.png');
+      expect(app.genres).toEqual(['Games', 'Puzzle']);
+      expect(app.genreIds).toEqual([6014, 7012]);
+      expect(app.primaryGenre).toBe('Games');
+      expect(app.primaryGenreId).toBe(6014);
+      expect(app.contentRating).toBe('4+');
+      expect(app.languages).toEqual(['en', 'es']);
+      expect(app.size).toBe(256000000);
+      expect(app.requiredOsVersion).toBe('12.0');
+      expect(app.released).toBe('2012-11-14T08:00:00Z');
+      expect(app.updated).toBe('2025-01-15T12:00:00Z');
+      expect(app.releaseNotes).toBe('Bug fixes.');
+      expect(app.version).toBe('1.2.3');
+      expect(app.price).toBe(0);
+      expect(app.currency).toBe('USD');
+      expect(app.free).toBe(true);
+      expect(app.developerId).toBe(284882215);
+      expect(app.developer).toBe('King');
+      expect(app.developerUrl).toBe(
+        'https://apps.apple.com/developer/king/id284882215'
+      );
+      expect(app.developerWebsite).toBe('https://king.com');
+      expect(app.score).toBe(4.5);
+      expect(app.reviews).toBe(1000000);
+      expect(app.currentVersionScore).toBe(4.6);
+      expect(app.currentVersionReviews).toBe(500000);
+      expect(app.screenshots).toEqual(['https://example.com/s1.png']);
+      expect(app.ipadScreenshots).toEqual(['https://example.com/ipad1.png']);
+      expect(app.appletvScreenshots).toEqual([]);
+      expect(app.supportedDevices).toEqual(['iPhone', 'iPad']);
+    });
+
+    it('uses artworkUrl100 when artworkUrl512 is missing (icon fallback)', async () => {
+      const json = JSON.stringify({
+        resultCount: 1,
+        results: [
+          {
+            kind: 'software',
+            trackId: 1,
+            artworkUrl100: 'https://example.com/100.png',
+          },
+        ],
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(json),
+      }) as typeof fetch;
+      const apps = await lookup(1, 'id');
+      expect(apps[0]!.icon).toBe('https://example.com/100.png');
+    });
+
+    it('handles missing optional fields with defaults (optional chaining)', async () => {
+      const json = JSON.stringify({
+        resultCount: 1,
+        results: [
+          {
+            kind: 'software',
+            trackId: 999,
+          },
+        ],
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(json),
+      }) as typeof fetch;
+      const apps = await lookup(999, 'id');
+      expect(apps).toHaveLength(1);
+      const app = apps[0]!;
+      expect(app.appId).toBe('');
+      expect(app.title).toBe('');
+      expect(app.url).toBe('');
+      expect(app.description).toBe('');
+      expect(app.icon).toBe('');
+      expect(app.genres).toEqual([]);
+      expect(app.genreIds).toEqual([]);
+      expect(app.primaryGenre).toBe('');
+      expect(app.primaryGenreId).toBe(0);
+      expect(app.contentRating).toBe('');
+      expect(app.languages).toEqual([]);
+      expect(app.size).toBe(0);
+      expect(app.requiredOsVersion).toBe('');
+      expect(app.released).toBe('');
+      expect(app.updated).toBe('');
+      expect(app.releaseNotes).toBe('');
+      expect(app.version).toBe('');
+      expect(app.price).toBe(0);
+      expect(app.currency).toBe('USD');
+      expect(app.free).toBe(true);
+      expect(app.developerId).toBe(0);
+      expect(app.developer).toBe('');
+      expect(app.developerUrl).toBe('');
+      expect(app.developerWebsite).toBeUndefined();
+      expect(app.score).toBe(0);
+      expect(app.reviews).toBe(0);
+      expect(app.currentVersionScore).toBe(0);
+      expect(app.currentVersionReviews).toBe(0);
+      expect(app.screenshots).toEqual([]);
+      expect(app.ipadScreenshots).toEqual([]);
+      expect(app.appletvScreenshots).toEqual([]);
+      expect(app.supportedDevices).toEqual([]);
+    });
+  });
+
+  describe('doRequest', () => {
+    const originalFetch = globalThis.fetch;
+    beforeEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('sends User-Agent header by default', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve('ok'),
+      }) as typeof fetch;
+      await doRequest('https://example.com');
+      expect(fetch).toHaveBeenCalledWith(
+        'https://example.com',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'User-Agent': expect.stringContaining('Mozilla/5.0'),
+          }),
+        })
+      );
+    });
+
+    it('returns response body verbatim on success', async () => {
+      const bodyText = '{"resultCount":1,"results":[]}';
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(bodyText),
+      }) as typeof fetch;
+      const body = await doRequest('https://example.com');
+      expect(body).toBe(bodyText);
+    });
+
+    it('throws immediately for non-retryable status codes (404)', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve('Not Found'),
+      }) as typeof fetch;
+      const err = await doRequest('https://example.com', { retries: 2 }).catch(
+        (e) => e
+      );
+      expect(err).toBeInstanceOf(HttpError);
+      expect(err.status).toBe(404);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries on 503 and eventually succeeds', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve(''),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('success'),
+        }) as typeof fetch;
+      const body = await doRequest('https://example.com', { retries: 2 });
+      expect(body).toBe('success');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on 429 (throttle) and eventually succeeds', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          text: () => Promise.resolve(''),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('ok'),
+        }) as typeof fetch;
+      const body = await doRequest('https://example.com', { retries: 2 });
+      expect(body).toBe('ok');
+      expect(fetch).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -6,12 +6,15 @@ import { doRequest, storeId } from './common.js';
 import { validateCountry } from './validate.js';
 import { HttpError, ValidationError } from './errors.js';
 
+/** Message used when the ratings endpoint returns 200 OK but an empty body (no parseable data). */
+export const RATINGS_EMPTY_MESSAGE = 'No ratings data returned';
+
 /**
  * Retrieves the rating histogram for an app (1-5 star breakdown).
  *
  * @param options - Options including app id
  * @returns Promise resolving to ratings with total count and histogram
- * @throws {HttpError} When the response is 200 but the body is empty, throws with message `No ratings data returned` and `status: 204` (No Content). Use `err instanceof HttpError && err.status === 204` to distinguish from real HTTP 404.
+ * @throws {HttpError} When the response is 200 OK but the body is empty, throws with {@link RATINGS_EMPTY_MESSAGE} and `status: 200`. Use `err instanceof HttpError && err.status === 200 && err.message === RATINGS_EMPTY_MESSAGE` to treat as "no data" without conflating with HTTP 204.
  *
  * `requestOptions.headers` can override the default `X-Apple-Store-Front` header; this is intentional for advanced use cases (e.g. store-specific or regional testing).
  *
@@ -42,7 +45,7 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
   });
 
   if (html.length === 0) {
-    throw new HttpError('No ratings data returned', 204, url);
+    throw new HttpError(RATINGS_EMPTY_MESSAGE, 200, url);
   }
 
   return parseRatings(html);
@@ -77,10 +80,15 @@ export function parseRatings(html: string): Ratings {
     .get();
   const ratingsByStar = rawByStar.slice(0, 5);
 
-  // Build histogram (convert array index to star rating 5,4,3,2,1)
+  // Build histogram. Bars are in descending order (5★…1★); index 0 → 5, index 4 → 1.
+  // Derive key from index via tuple so type is 1|2|3|4|5 without assertion.
+  const STAR_KEYS = [1, 2, 3, 4, 5] as const;
   const histogram: RatingHistogram = ratingsByStar.reduce<RatingHistogram>(
     (acc, ratingsForStar, index) => {
-      const starRating = (5 - index) as 1 | 2 | 3 | 4 | 5;
+      const starRating = STAR_KEYS[4 - index];
+      if (starRating === undefined) {
+        throw new Error(`Unexpected rating index: ${index}`);
+      }
       acc[starRating] = ratingsForStar;
       return acc;
     },

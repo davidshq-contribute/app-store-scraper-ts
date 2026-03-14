@@ -60,6 +60,24 @@ describe('screenshots', () => {
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.webp'
         );
       });
+
+      it('matches only at end of URL (regex $ anchor) — path with duplicate size pattern', () => {
+        // If $ anchor were removed, regex might match first occurrence and produce wrong result
+        const srcset =
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/bar/100x100bb.webp 600w';
+        const result = extractScreenshotUrl(srcset);
+        expect(result).toBe(
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/bar/392x696bb.webp'
+        );
+      });
+
+      it('rejects URL with trailing content after extension (no match)', () => {
+        // URL has extra path after .webp — regex should not match, returns original
+        const srcset = 'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/extra 100w';
+        const result = extractScreenshotUrl(srcset);
+        // Parser extracts URL as parts[0]; regex does not match so replace returns original
+        expect(result).toBe('https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/extra');
+      });
     });
 
     describe('parseScreenshotsFromHtml', () => {

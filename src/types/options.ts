@@ -5,12 +5,14 @@ import type { Collection, Category, Device, Sort } from './constants.js';
  *
  * **Supported:**
  * - `headers` – Custom headers merged over the default User-Agent, Accept, and Accept-Language.
+ *   To override the User-Agent (e.g. if the default ages and triggers bot detection), pass
+ *   `headers: { 'User-Agent': '...' }`.
  * - `timeoutMs` – Request timeout in milliseconds (default: 15000). Must be a positive finite number. Uses `AbortSignal.timeout()`.
  * - `retries` – Number of retries for transient failures (default: 0, opt-in). Retries on 429, 503,
  *   network errors, and timeout (AbortError), with exponential backoff. Set to a positive value (e.g. 2) to enable.
  */
 export interface RequestOptions {
-  /** Custom request headers (merged with defaults). */
+  /** Custom request headers (merged with defaults). Pass `User-Agent` to override the built-in value. */
   headers?: Record<string, string>;
   /** Request timeout in milliseconds. Must be positive and finite. Default 15000. */
   timeoutMs?: number;

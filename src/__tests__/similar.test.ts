@@ -4,6 +4,7 @@ import * as common from '../lib/common.js';
 import type { App } from '../types/app.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { runIntegrationTests } from './integration.js';
+import { HttpError } from '../lib/errors.js';
 
 vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
@@ -11,6 +12,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
     ...actual,
     doRequest: vi.fn(),
     lookup: vi.fn(),
+    resolveAppId: vi.fn(),
   };
 });
 
@@ -92,6 +94,7 @@ describe('similar', () => {
     beforeEach(() => {
       vi.mocked(common.doRequest).mockReset();
       vi.mocked(common.lookup).mockReset();
+      vi.mocked(common.resolveAppId).mockReset();
     });
 
     it('extracts app ids and linkTypes from HTML snippet (section headings + app links)', async () => {
@@ -129,6 +132,120 @@ describe('similar', () => {
       });
       expect(results[2]).toEqual({ app: minimalApp(333, 'App 3'), linkType: 'more-by-developer' });
     });
+
+    it('returns [] when doRequest throws HttpError 404 (app page not found)', async () => {
+      vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Not found', 404));
+
+      const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
+
+      expect(results).toEqual([]);
+    });
+
+    it('rethrows when doRequest throws HttpError 500', async () => {
+      const err = new HttpError('Internal Server Error', 500);
+      vi.mocked(common.doRequest).mockRejectedValueOnce(err);
+
+      await expect(similar({ id: 999, country: DEFAULT_COUNTRY })).rejects.toThrow(err);
+    });
+
+    it('uses resolveAppId when appId provided and id is null', async () => {
+      const resolvedId = 842842640;
+      vi.mocked(common.resolveAppId).mockResolvedValueOnce(resolvedId);
+      const html = `
+        <body>
+          <h2>Customers Also Bought</h2>
+          <a href="https://apps.apple.com/us/app/foo/id111">App 1</a>
+        </body>
+      `;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(111, 'App 1')]);
+
+      const results = await similar({
+        appId: 'com.google.Docs',
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(common.resolveAppId).toHaveBeenCalledWith({
+        appId: 'com.google.Docs',
+        country: DEFAULT_COUNTRY,
+        requestOptions: undefined,
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual(minimalApp(111, 'App 1'));
+    });
+
+    it('wraps resolveAppId error with clear message when appId cannot be resolved', async () => {
+      vi.mocked(common.resolveAppId).mockRejectedValueOnce(new Error('Bundle not found'));
+
+      await expect(
+        similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY })
+      ).rejects.toThrow(/Could not resolve app id "com.nonexistent.app": Bundle not found/);
+    });
+
+    it('returns plain App[] when includeLinkType is false (default)', async () => {
+      const html = `
+        <body>
+          <h2>Customers Also Bought</h2>
+          <a href="https://apps.apple.com/us/app/foo/id111">App 1</a>
+          <a href="https://apps.apple.com/us/app/bar/id222">App 2</a>
+        </body>
+      `;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.lookup).mockResolvedValueOnce([
+        minimalApp(111, 'App 1'),
+        minimalApp(222, 'App 2'),
+      ]);
+
+      const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
+
+      expect(results).toHaveLength(2);
+      expect(results[0]).toEqual(minimalApp(111, 'App 1'));
+      expect(results[1]).toEqual(minimalApp(222, 'App 2'));
+      expect(results[0]).not.toHaveProperty('linkType');
+      expect(results[0]).toHaveProperty('id');
+      expect(results[0]).toHaveProperty('title');
+    });
+
+    it('deduplicates results when HTML has duplicate app IDs in same section (includeLinkType: true)', async () => {
+      const html = `
+        <body>
+          <h2>Customers Also Bought</h2>
+          <a href="https://apps.apple.com/us/app/foo/id111">App 1</a>
+          <a href="https://apps.apple.com/us/app/bar/id111">App 1 duplicate</a>
+          <a href="https://apps.apple.com/us/app/baz/id222">App 2</a>
+        </body>
+      `;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.lookup).mockResolvedValueOnce([
+        minimalApp(111, 'App 1'),
+        minimalApp(222, 'App 2'),
+      ]);
+
+      const results = await similar({
+        id: 999,
+        country: DEFAULT_COUNTRY,
+        includeLinkType: true,
+      });
+
+      expect(results).toHaveLength(2);
+      expect(results[0]).toEqual({ app: minimalApp(111, 'App 1'), linkType: 'customers-also-bought' });
+      expect(results[1]).toEqual({ app: minimalApp(222, 'App 2'), linkType: 'customers-also-bought' });
+    });
+
+    it('returns [] when HTML has no similar section (empty entries early return)', async () => {
+      const html = `
+        <body>
+          <h2>Unrelated Section</h2>
+          <p>No app links here.</p>
+        </body>
+      `;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+
+      const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
+
+      expect(results).toEqual([]);
+      expect(common.lookup).not.toHaveBeenCalled();
+    });
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
@@ -136,6 +253,7 @@ describe('similar', () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
       vi.mocked(common.doRequest).mockImplementation(actual.doRequest);
       vi.mocked(common.lookup).mockImplementation(actual.lookup);
+      vi.mocked(common.resolveAppId).mockImplementation(actual.resolveAppId);
     });
 
     it('should fetch similar apps by ID (Google Docs)', { timeout: 15000 }, async () => {

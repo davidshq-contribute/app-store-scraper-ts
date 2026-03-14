@@ -16,7 +16,7 @@ import { reviewsFeedSchema } from './schemas.js';
  * Retrieves user reviews for an app.
  * @param options - Options including app id, pagination, and sorting
  * @returns Promise resolving to array of reviews
- * @throws {ValidationError} if neither `id` nor `appId` is provided, or `country`/`sort`/`page` are invalid
+ * @throws {ValidationError} if neither `id` nor `appId` is provided, `country`/`sort`/`page` are invalid, or API response validation fails (field: `'response'`)
  * @throws {HttpError} on non-OK HTTP response from the reviews RSS feed
  * @throws {Error} if `appId` cannot be resolved to a numeric ID (wraps original error as `cause`)
  *
@@ -64,7 +64,10 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      throw new Error(`Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+      throw new Error(
+        `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
     }
   }
 
@@ -83,7 +86,10 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   const validationResult = reviewsFeedSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(`Reviews API response validation failed: ${validationResult.error.message}`);
+    throw new ValidationError(
+      `Reviews API response validation failed: ${validationResult.error.message}`,
+      'response'
+    );
   }
 
   const data = validationResult.data;

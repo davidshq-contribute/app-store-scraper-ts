@@ -1,6 +1,6 @@
 /**
  * Error thrown when an HTTP request fails with a non-OK status, or when a response
- * is successful but has no usable body (e.g. 200 OK with empty body reported as 204).
+ * is 200 OK but has no usable body (caller should check status and message; see e.g. ratings module).
  * Extends Error so existing `catch (err)` and `err.message` checks keep working.
  * Use `error.status` (and optionally `error.url`) for structured handling instead of parsing the message.
  *
@@ -11,14 +11,14 @@
  *   if (err instanceof HttpError && err.status === 404) {
  *     // handle not found
  *   }
- *   if (err instanceof HttpError && err.status === 204) {
- *     // handle success but no content (e.g. empty ratings response)
+ *   if (err instanceof HttpError && err.status === 200 && err.message === 'No ratings data returned') {
+ *     // handle 200 OK but empty body (e.g. ratings endpoint; see ratings.RATINGS_EMPTY_MESSAGE)
  *   }
  *   throw err;
  * }
  */
 export class HttpError extends Error {
-  /** HTTP status code (e.g. 404, 500). May be 204 for "success but no body" in some APIs. */
+  /** HTTP status code (e.g. 404, 500). Reflects the actual response status. */
   readonly status: number;
   /** Request URL (if available). */
   readonly url?: string;

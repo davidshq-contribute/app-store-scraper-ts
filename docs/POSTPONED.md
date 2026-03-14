@@ -24,35 +24,9 @@ Enhancements we’ve decided to defer. They may be revisited when we need parity
 
 **Status:** Postponed.
 
-## 1. Bugs & Correctness Issues
-
----
-
-### 1.2 [Low] Ratings Histogram Order Assumption
-
-**File:** `src/lib/ratings.ts:67-78`
-**Severity:** Low (defended by sanity check, but silent on order flip)
-
-The histogram parser assumes `.vote .total` elements are in descending order (5-star first). If Apple reverses the order, the histogram silently inverts (5-star count assigned to 1-star, etc.) because there's no per-row label check.
-
-**Recommendation:** Parse the star label from each row's sibling/parent element (e.g., aria-label, adjacent text) rather than relying on DOM order. If labels aren't available, log a warning when more than one ordering interpretation produces a valid histogram.
-
----
-
 ## 2. Security & Robustness
 
-### 2.1 [Low] Hardcoded User-Agent May Trigger Bot Detection
-
-**File:** `src/lib/common.ts:47`
-**Severity:** Low
-
-The `User-Agent` string (`Chrome/120.0.0.0`) will age and may eventually be flagged by Apple's CDN. Users can override via `requestOptions.headers`, but the default should be periodically updated.
-
-**Recommendation:** Either document that users should pass their own `User-Agent`, or bump the Chrome version in a maintenance release cycle. Consider making the default `User-Agent` a named export so consumers can inspect/override it.
-
----
-
-### 2.2 [Low] URL Construction via Template Literals
+### 2.1 [Low] URL Construction via Template Literals
 
 **Files:** `src/lib/reviews.ts:51`, `src/lib/list.ts:119-123`, `src/lib/ratings.ts:33`
 **Severity:** Low (mitigated by allowlist validation)

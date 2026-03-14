@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { suggest } from '../lib/suggest.js';
+import { ValidationError } from '../lib/errors.js';
 import { runIntegrationTests } from './integration.js';
 import * as common from '../lib/common.js';
 
@@ -12,8 +13,13 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 });
 
 describe('suggest', () => {
-  it('should throw error when term is missing', async () => {
-    await expect(suggest({ term: '' })).rejects.toThrow('term is required');
+  it('should throw ValidationError when term is missing', async () => {
+    const err = await suggest({ term: '' }).then(
+      () => expect.fail('expected rejection'),
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as Error).message).toBe('term is required');
   });
 
   describe('hints format', () => {

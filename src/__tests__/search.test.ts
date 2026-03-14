@@ -47,14 +47,107 @@ describe('search', () => {
     );
     await search({ term: 'test', device: device.IPAD });
     let calls = vi.mocked(common.doRequest).mock.calls;
-    expect(calls[calls.length - 1]?.[0]).toContain('entity=iPadSoftware');
+    const ipadUrl = calls[calls.length - 1]?.[0] ?? '';
+    expect(new URL(ipadUrl).searchParams.get('entity')).toBe('iPadSoftware');
 
     vi.mocked(common.doRequest).mockResolvedValueOnce(
       JSON.stringify({ resultCount: 0, results: [] })
     );
     await search({ term: 'test', device: device.MAC });
     calls = vi.mocked(common.doRequest).mock.calls;
-    expect(calls[calls.length - 1]?.[0]).toContain('entity=macSoftware');
+    const macUrl = calls[calls.length - 1]?.[0] ?? '';
+    expect(new URL(macUrl).searchParams.get('entity')).toBe('macSoftware');
+  });
+
+  it('returns only trackIds when idsOnly is true (unit)', async () => {
+    const rawResponse = {
+      resultCount: 3,
+      results: [
+        { kind: 'software', trackId: 123, trackName: 'App A', bundleId: 'com.a' },
+        { kind: 'software', trackId: 456, trackName: 'App B', bundleId: 'com.b' },
+        { kind: 'software', trackId: 789, trackName: 'App C', bundleId: 'com.c' },
+      ],
+    };
+    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rawResponse));
+
+    const results = await search({ term: 'test', num: 10, idsOnly: true });
+
+    expect(results).toEqual([123, 456, 789]);
+    expect(results.every((r) => typeof r === 'number')).toBe(true);
+  });
+
+  it('filters out undefined trackIds when idsOnly is true', async () => {
+    const rawResponse = {
+      resultCount: 3,
+      results: [
+        { kind: 'software', trackId: 111, trackName: 'A', bundleId: 'com.a' },
+        { kind: 'software', trackId: undefined, trackName: 'B', bundleId: 'com.b' },
+        { kind: 'software', trackId: 333, trackName: 'C', bundleId: 'com.c' },
+      ],
+    };
+    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rawResponse));
+
+    const results = await search({ term: 'test', num: 10, idsOnly: true });
+
+    expect(results).toEqual([111, 333]);
+  });
+
+  it('applies cleanApp transformation to raw iTunes results', async () => {
+    const rawResponse = {
+      resultCount: 1,
+      results: [
+        {
+          kind: 'software',
+          trackId: 999,
+          bundleId: 'com.example.raw',
+          trackName: 'Raw App Title',
+          trackViewUrl: 'https://apps.apple.com/app/id999',
+          description: 'Raw description',
+          artworkUrl512: 'https://example.com/512.png',
+          artworkUrl100: 'https://example.com/100.png',
+          genres: ['Games', 'Entertainment'],
+          genreIds: [6014, 6016],
+          primaryGenreName: 'Games',
+          primaryGenreId: 6014,
+          contentAdvisoryRating: '4+',
+          languageCodesISO2A: ['en'],
+          fileSizeBytes: 50000000,
+          minimumOsVersion: '15.0',
+          releaseDate: '2024-01-01T00:00:00Z',
+          currentVersionReleaseDate: '2024-02-01T00:00:00Z',
+          releaseNotes: 'Bug fixes',
+          version: '1.0.0',
+          price: 0,
+          currency: 'USD',
+          artistId: 12345,
+          artistName: 'Dev Name',
+          artistViewUrl: 'https://apps.apple.com/developer/id12345',
+          sellerUrl: 'https://example.com',
+          averageUserRating: 4.5,
+          userRatingCount: 100,
+          averageUserRatingForCurrentVersion: 4.5,
+          userRatingCountForCurrentVersion: 50,
+          screenshotUrls: ['https://example.com/s1.png'],
+          ipadScreenshotUrls: [],
+          appletvScreenshotUrls: [],
+          supportedDevices: ['iPhone', 'iPad'],
+        },
+      ],
+    };
+    vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rawResponse));
+
+    const results = await search({ term: 'test', num: 10 });
+
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBe(1);
+    const app = results[0]!;
+    expect(app).toHaveProperty('id', 999);
+    expect(app).toHaveProperty('appId', 'com.example.raw');
+    expect(app).toHaveProperty('title', 'Raw App Title');
+    expect(app).toHaveProperty('url', 'https://apps.apple.com/app/id999');
+    expect(app).not.toHaveProperty('trackId');
+    expect(app).not.toHaveProperty('trackName');
+    expect(app).not.toHaveProperty('bundleId');
   });
 
   describe('pagination cap (BUG-3)', () => {

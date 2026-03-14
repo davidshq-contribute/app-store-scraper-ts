@@ -71,8 +71,8 @@ try {
   if (err instanceof HttpError && err.status === 404) {
     // App not found
   }
-  if (err instanceof HttpError && err.status === 204) {
-    // Success but no content (e.g. empty ratings response)
+  if (err instanceof HttpError && err.status === 200 && err.message === 'No ratings data returned') {
+    // 200 OK but empty body (e.g. ratings endpoint)
   }
   throw err;
 }

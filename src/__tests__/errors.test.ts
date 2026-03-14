@@ -13,6 +13,7 @@ describe('HttpError', () => {
     expect(err.message).toBe('Request to https://example.com failed with status 404');
     expect(err.status).toBe(404);
     expect(err.url).toBe('https://example.com');
+    expect('field' in err).toBe(false); // HttpError has no field property
     expect(err.name).toBe('HttpError');
   });
 
@@ -20,6 +21,7 @@ describe('HttpError', () => {
     const err = new HttpError('Request failed with status 500', 500);
     expect(err.status).toBe(500);
     expect(err.url).toBeUndefined();
+    expect('field' in err).toBe(false); // HttpError has no field property
   });
 
   it('enables consumers to match on status without parsing message', () => {
@@ -37,6 +39,7 @@ describe('ValidationError', () => {
     const err = new ValidationError('Invalid country: "zz"', 'country');
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(ValidationError);
+    expect(err).not.toBeInstanceOf(HttpError); // distinct from HttpError hierarchy
     expect(err.message).toBe('Invalid country: "zz"');
     expect(err.field).toBe('country');
     expect(err.name).toBe('ValidationError');

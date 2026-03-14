@@ -1,4 +1,11 @@
-import { collection, category, device, sort, markets } from '../types/constants.js';
+import {
+  collection,
+  category,
+  device,
+  ITUNES_API_MAX_LIMIT,
+  sort,
+  markets,
+} from '../types/constants.js';
 import { ValidationError } from './errors.js';
 
 const validCountries = new Set(Object.keys(markets));
@@ -93,21 +100,20 @@ export function validateReviewsPage(page: number): void {
   }
 }
 
-/** List RSS feed limit: min 1, max 200 (per API). */
+/** List RSS feed limit: min 1, max per API (see ITUNES_API_MAX_LIMIT). */
 const LIST_NUM_MIN = 1;
-const LIST_NUM_MAX = 200;
 
 /**
  * Validates `num` for list() options (number of results).
  * Use before building list RSS URL to avoid sending invalid limit.
  *
- * @param num - Number of results (default 50, max 200)
- * @throws {ValidationError} with field "num" if num is not in [1, 200]
+ * @param num - Number of results (default 50, max per ITUNES_API_MAX_LIMIT)
+ * @throws {ValidationError} with field "num" if num is not in [1, ITUNES_API_MAX_LIMIT]
  */
 export function validateListNum(num: number): void {
-  if (!Number.isInteger(num) || num < LIST_NUM_MIN || num > LIST_NUM_MAX) {
+  if (!Number.isInteger(num) || num < LIST_NUM_MIN || num > ITUNES_API_MAX_LIMIT) {
     throw new ValidationError(
-      `num must be an integer between ${LIST_NUM_MIN} and ${LIST_NUM_MAX}`,
+      `num must be an integer between ${LIST_NUM_MIN} and ${ITUNES_API_MAX_LIMIT}`,
       'num'
     );
   }

@@ -36,7 +36,7 @@ export { list } from './lib/list.js';
 export { search } from './lib/search.js';
 export { developer } from './lib/developer.js';
 export { reviews } from './lib/reviews.js';
-export { ratings } from './lib/ratings.js';
+export { ratings, RATINGS_EMPTY_MESSAGE } from './lib/ratings.js';
 export { similar } from './lib/similar.js';
 export { suggest } from './lib/suggest.js';
 export { privacy } from './lib/privacy.js';

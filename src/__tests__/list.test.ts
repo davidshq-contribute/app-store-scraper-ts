@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { list } from '../lib/list.js';
 import * as common from '../lib/common.js';
-import { collection, DEFAULT_COUNTRY } from '../types/constants.js';
+import { collection, category, DEFAULT_COUNTRY } from '../types/constants.js';
 import { runIntegrationTests } from './integration.js';
 
 vi.mock('../lib/common.js', async (importOriginal) => {
@@ -158,6 +158,189 @@ describe('list', () => {
       expect(results).toHaveLength(1);
       expect(results[0]!.price).toBe(0);
       expect(results[0]!.free).toBe(true);
+    });
+
+    it('returns empty array when feed has no entries (feed.entry undefined)', async () => {
+      const emptyFeed = { feed: {} };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(emptyFeed));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toEqual([]);
+    });
+
+    it('returns empty array when feed.entry is empty array', async () => {
+      const emptyFeed = { feed: { entry: [] } };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(emptyFeed));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toEqual([]);
+    });
+
+    it('constructs URL with collection, category, country, and limit', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.test' } },
+              'im:name': { label: 'Test' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      await list({
+        collection: collection.TOP_GROSSING_IOS,
+        category: category.GAMES,
+        num: 25,
+        country: 'gb',
+      });
+
+      expect(common.doRequest).toHaveBeenCalledTimes(1);
+      const url = vi.mocked(common.doRequest).mock.calls[0]![0];
+      expect(url).toContain('https://itunes.apple.com/gb/rss/topgrossingapplications');
+      expect(url).toContain('genre=6014');
+      expect(url).toContain('limit=25');
+      expect(url).toMatch(/\/json$/);
+    });
+
+    it('parses link as single object (not array) and extracts alternate href', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '777', 'im:bundleId': 'com.single-link.app' } },
+              'im:name': { label: 'Single Link App' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: { attributes: { href: 'https://apps.apple.com/us/app/single/id777', rel: 'alternate' } },
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.url).toBe('https://apps.apple.com/us/app/single/id777');
+    });
+
+    it('returns empty url when no link with rel=alternate', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.no-link.app' } },
+              'im:name': { label: 'No Link' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://other.com', rel: 'enclosure' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.url).toBe('');
+    });
+
+    it('returns developerId 0 when artist has no href', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.test' } },
+              'im:name': { label: 'Test' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev' },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.developerId).toBe(0);
+      expect(results[0]!.developerUrl).toBe('');
+    });
+
+    it('returns genreId 0 when category im:id is missing or invalid', async () => {
+      const minimalRss = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.test' } },
+              'im:name': { label: 'Test' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(minimalRss));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.genreId).toBe(0);
+      expect(results[0]!.genre).toBe('Games');
     });
 
     it('parses developerId correctly when developer slug contains "id" (e.g. identity-games)', async () => {

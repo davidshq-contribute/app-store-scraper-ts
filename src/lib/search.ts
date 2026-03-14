@@ -1,27 +1,24 @@
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
-import { DEFAULT_COUNTRY, device as deviceConstants } from '../types/constants.js';
+import { DEFAULT_COUNTRY, device as deviceConstants, ITUNES_API_MAX_LIMIT } from '../types/constants.js';
 import { doRequest, cleanApp, parseJson } from './common.js';
 import { ValidationError } from './errors.js';
 import { validateCountry, validateSearchPagination, validateDevice } from './validate.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 
-/** iTunes Search API maximum results per request (Apple-enforced). */
-const ITUNES_SEARCH_MAX_LIMIT = 200;
-
 /**
  * Searches for apps in the App Store.
  *
  * Pagination is implemented client-side: the API is called with a limit of
- * `min(page * num, 200)` so that the requested page has results, then results
- * are sliced to the current page. The iTunes Search API returns at most 200
- * results per query (no offset), so only the first 200 hits are accessible.
+ * `min(page * num, ITUNES_API_MAX_LIMIT)` so that the requested page has results, then results
+ * are sliced to the current page. The iTunes Search API returns at most ITUNES_API_MAX_LIMIT
+ * results per query (no offset), so only that many hits are accessible per search.
  * Requesting a page beyond that (e.g. `page: 5` with `num: 50`) yields fewer
  * results or an empty page.
  *
  * @param options - Search options including term, pagination, etc.
  * @returns When `idsOnly: true`, `Promise<number[]>`; otherwise `Promise<App[]>`.
- * @throws {ValidationError} if `term` is missing, or `country`/`num`/`page`/`device` are invalid
+ * @throws {ValidationError} if `term` is missing, `country`/`num`/`page`/`device` are invalid, or API response validation fails (field: `'response'`)
  * @throws {HttpError} on non-OK HTTP response from the iTunes Search API
  *
  * @example
@@ -68,7 +65,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   // Request enough results to cover the requested page. The iTunes Search API
   // has no offset and a hard cap of 200; we request up to that and slice client-side.
   const requestedLimit = page * num;
-  const limit = Math.min(requestedLimit, ITUNES_SEARCH_MAX_LIMIT);
+  const limit = Math.min(requestedLimit, ITUNES_API_MAX_LIMIT);
 
   const entity = deviceOption ?? deviceConstants.ALL;
   const params = new URLSearchParams({
@@ -91,7 +88,10 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(`Search API response validation failed: ${validationResult.error.message}`);
+    throw new ValidationError(
+      `Search API response validation failed: ${validationResult.error.message}`,
+      'response'
+    );
   }
 
   const response = validationResult.data;

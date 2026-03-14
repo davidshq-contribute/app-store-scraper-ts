@@ -5,7 +5,7 @@ import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { appPageUrl, doRequest, lookup, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
 import { HttpError } from './errors.js';
-import { ratings } from './ratings.js';
+import { ratings, RATINGS_EMPTY_MESSAGE } from './ratings.js';
 
 /**
  * Extracts a clean screenshot URL from srcset attribute.
@@ -207,8 +207,10 @@ export async function app(options: AppOptions): Promise<App> {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
       result = { ...result, histogram: ratingsData.histogram };
     } catch (error) {
-      // 404 = ratings endpoint not found; 204 = 200 OK but empty body (no ratings data). Continue without histogram.
-      if (!(error instanceof HttpError && (error.status === 404 || error.status === 204))) {
+      // 404 = ratings endpoint not found; 200 + RATINGS_EMPTY_MESSAGE = 200 OK but empty body. Continue without histogram.
+      if (
+        !(error instanceof HttpError && (error.status === 404 || (error.status === 200 && error.message === RATINGS_EMPTY_MESSAGE)))
+      ) {
         throw error;
       }
     }
