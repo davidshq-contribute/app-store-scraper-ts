@@ -85,6 +85,18 @@ describe('parseRatings', () => {
     expect(result.histogram[5]).toBe(1);
   });
 
+  it('parses totals with thousands separators in .rating-count', () => {
+    const html = '<div><div class="rating-count">1,234 Ratings</div><span class="vote"><span class="total">1234</span></span></div>';
+    const result = parseRatings(html);
+    expect(result.ratings).toBe(1234);
+  });
+
+  it('parses totals with localized spacing separators in .rating-count', () => {
+    const html = '<div><div class="rating-count">12\u00A0345 Ratings</div><span class="vote"><span class="total">12345</span></span></div>';
+    const result = parseRatings(html);
+    expect(result.ratings).toBe(12345);
+  });
+
   it('returns parsed result with warnings when histogram sum does not match total (page structure change)', () => {
     // Total 999 but first 5 bars sum to 10+20+30+25+15 = 100; sanity check detects mismatch.
     const html = fixtureHtml(999, 10, 20, 30, 25, 15);

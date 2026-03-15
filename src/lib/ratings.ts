@@ -58,9 +58,14 @@ export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
   // Extract total rating count
-  const ratingsMatch = $('.rating-count').text().match(/\d+/);
-  const totalRatings =
-    Array.isArray(ratingsMatch) && ratingsMatch[0] ? parseInt(ratingsMatch[0], 10) : 0;
+  const ratingCountText = $('.rating-count').text();
+  const ratingCountMatch = ratingCountText.match(/\d[\d\s,.\u00A0\u202F]*/);
+  const totalRatings = (() => {
+    const normalized = ratingCountMatch?.[0]?.replace(/\D/g, '') ?? '';
+    if (normalized === '') return 0;
+    const parsed = parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  })();
 
   // Extract per-row vote elements. Each .vote row has a .total with the count.
   // We try to detect the star rating from labels in the row (aria-label, text

@@ -58,7 +58,7 @@ describe('app', () => {
       url: 'https://apps.apple.com/us/app/test/id12345',
       description: 'Desc',
       icon: 'https://example.com/icon.png',
-      screenshots: [] as string[],
+      screenshots: ['https://example.com/screenshot.webp'] as string[],
       ipadScreenshots: [] as string[],
       appletvScreenshots: [] as string[],
       developer: 'Dev',
@@ -84,6 +84,13 @@ describe('app', () => {
       requiredOsVersion: '17.0',
       releaseNotes: 'Bug fixes',
       supportedDevices: ['iPhone', 'iPad'],
+    };
+
+    const baseAppWithoutScreenshots = {
+      ...baseApp,
+      screenshots: [] as string[],
+      ipadScreenshots: [] as string[],
+      appletvScreenshots: [] as string[],
     };
 
     it('calls lookup with bundleId when appId is provided', async () => {
@@ -115,7 +122,7 @@ describe('app', () => {
     });
 
     it('scrapes screenshots when iTunes API returns empty arrays', async () => {
-      vi.mocked(common.lookup).mockResolvedValueOnce([baseApp]);
+      vi.mocked(common.lookup).mockResolvedValueOnce([baseAppWithoutScreenshots]);
       const htmlWithScreenshots = `
         <ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
           <li><picture><source type="image/webp" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp 100w"></source></picture></li>
@@ -134,7 +141,7 @@ describe('app', () => {
     });
 
     it('returns empty screenshots when scrape gets 404', async () => {
-      vi.mocked(common.lookup).mockResolvedValueOnce([baseApp]);
+      vi.mocked(common.lookup).mockResolvedValueOnce([baseAppWithoutScreenshots]);
       vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Not Found', 404));
 
       const result = await app({ id: 12345, country: DEFAULT_COUNTRY });
@@ -145,7 +152,7 @@ describe('app', () => {
     });
 
     it('throws when scrape gets non-404 error', async () => {
-      vi.mocked(common.lookup).mockResolvedValueOnce([baseApp]);
+      vi.mocked(common.lookup).mockResolvedValueOnce([baseAppWithoutScreenshots]);
       vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Server Error', 500));
 
       await expect(app({ id: 12345, country: DEFAULT_COUNTRY })).rejects.toThrow(HttpError);
