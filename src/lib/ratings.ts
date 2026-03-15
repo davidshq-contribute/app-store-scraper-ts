@@ -14,7 +14,7 @@ export const RATINGS_EMPTY_MESSAGE = 'No ratings data returned';
  *
  * @param options - Options including app id
  * @returns Promise resolving to ratings with total count and histogram
- * @throws {HttpError} When the response is 200 OK but the body is empty, throws with {@link RATINGS_EMPTY_MESSAGE} and `status: 200`. Use `err instanceof HttpError && err.status === 200 && err.message === RATINGS_EMPTY_MESSAGE` to treat as "no data" without conflating with HTTP 204.
+ * @throws {HttpError} When the response is 200 OK but the body is empty, throws with {@link RATINGS_EMPTY_MESSAGE} and `status: 200`. Use `err instanceof HttpError && err.status === 200` to treat as "no data".
  *
  * `requestOptions.headers` can override the default `X-Apple-Store-Front` header; this is intentional for advanced use cases (e.g. store-specific or regional testing).
  *
@@ -82,7 +82,8 @@ export function parseRatings(html: string): Ratings {
   voteRows.each((_, row) => {
     const $row = $(row);
     const countText = $row.find('.total').text();
-    const count = Number.isNaN(parseInt(countText, 10)) ? 0 : parseInt(countText, 10);
+    const parsed = parseInt(countText, 10);
+    const count = Number.isNaN(parsed) ? 0 : parsed;
 
     // Try aria-label on the row or its children, then fall back to text matching
     const ariaLabel = $row.attr('aria-label') ?? $row.find('[aria-label]').attr('aria-label') ?? '';

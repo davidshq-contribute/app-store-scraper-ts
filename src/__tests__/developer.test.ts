@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { developer } from '../lib/developer.js';
 import { ValidationError } from '../lib/errors.js';
 import { runIntegrationTests } from './integration.js';

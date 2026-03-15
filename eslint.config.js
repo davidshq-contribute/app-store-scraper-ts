@@ -46,5 +46,16 @@ export default tseslint.config(
       'prefer-const': 'error',
       'no-var': 'error',
     },
+  },
+
+  // Relax strict type-safety rules in test files: catch blocks (.catch((e) => e))
+  // and asymmetric matchers (expect.objectContaining) inherently produce `any` types.
+  {
+    files: ['src/__tests__/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
   }
 );

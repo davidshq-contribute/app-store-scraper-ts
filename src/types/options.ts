@@ -98,9 +98,10 @@ export interface DeveloperOptions extends BaseOptions {
 }
 
 /**
- * Options for the reviews() method
+ * Options for the reviews() method.
+ * Omits `lang`: the reviews RSS feed is locale-based (determined by country/store-front), not per-request language.
  */
-export interface ReviewsOptions extends BaseOptions {
+export interface ReviewsOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID */
   id?: number;
   /** Bundle ID */
