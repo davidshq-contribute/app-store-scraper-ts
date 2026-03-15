@@ -37,15 +37,17 @@ describe('app', () => {
   it('throws Error when lookup returns no results (by id)', async () => {
     vi.mocked(common.lookup).mockResolvedValueOnce([]);
     const err = await app({ id: 999999 }).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('App not found: 999999');
+    expect(err).toBeInstanceOf(HttpError);
+    expect((err as HttpError).message).toBe('App not found: 999999');
+    expect((err as HttpError).status).toBe(404);
   });
 
   it('throws Error when lookup returns no results (by appId)', async () => {
     vi.mocked(common.lookup).mockResolvedValueOnce([]);
     const err = await app({ appId: 'com.nonexistent.fake' }).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe('App not found: com.nonexistent.fake');
+    expect(err).toBeInstanceOf(HttpError);
+    expect((err as HttpError).message).toBe('App not found: com.nonexistent.fake');
+    expect((err as HttpError).status).toBe(404);
   });
 
   describe('fixture-based (no network)', () => {

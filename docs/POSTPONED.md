@@ -6,13 +6,11 @@ Enhancements we’ve decided to defer. They may be revisited when we need parity
 
 ## Postponed Bugs
 
-### B1: `reviews()` `slice(1)` drops first entry
+### ~~B1: `reviews()` `slice(1)` drops first entry~~ **FIXED**
 
-**Context:** `reviews()` uses `slice(1)` somewhere in its flow, which drops the first entry. Single-review feeds therefore return empty.
+**Context:** `reviews()` used `slice(1)` which dropped the first entry. Single-review feeds returned empty.
 
-**Impact:** P0, Medium–High. Affects any app with only one review.
-
-**Status:** Won't fix now.
+**Fix:** Replaced `slice(1)` with `entries.filter((entry) => entry.author != null)` to distinguish metadata entries (no `author`) from real reviews. Tests added for single-review, metadata-only, and empty feed cases.
 
 ---
 

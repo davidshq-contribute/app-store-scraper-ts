@@ -174,7 +174,7 @@ export async function app(options: AppOptions): Promise<App> {
   );
 
   if (apps.length === 0) {
-    throw new Error(`App not found: ${id || appId}`);
+    throw new HttpError(`App not found: ${id || appId}`, 404);
   }
 
   const appData = apps[0]!;

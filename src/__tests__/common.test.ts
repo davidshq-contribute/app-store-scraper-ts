@@ -144,9 +144,10 @@ describe('common utilities', () => {
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
       }) as typeof fetch;
-      await expect(resolveAppId({ appId: 'com.nonexistent.app' })).rejects.toThrow(
-        'App not found: com.nonexistent.app'
-      );
+      const err = await resolveAppId({ appId: 'com.nonexistent.app' }).catch((e) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect(err.message).toBe('App not found: com.nonexistent.app');
+      expect(err.status).toBe(404);
     });
 
     it('passes country and requestOptions to lookup', async () => {

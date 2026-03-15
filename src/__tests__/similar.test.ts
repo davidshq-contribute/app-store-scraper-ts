@@ -174,19 +174,23 @@ describe('similar', () => {
       expect(results[0]).toEqual(minimalApp(111, 'App 1'));
     });
 
-    it('wraps resolveAppId error with clear message when appId cannot be resolved', async () => {
-      vi.mocked(common.resolveAppId).mockRejectedValueOnce(new Error('Bundle not found'));
+    it('throws HttpError preserving status when resolveAppId fails with HttpError', async () => {
+      vi.mocked(common.resolveAppId).mockRejectedValueOnce(new HttpError('App not found', 404));
 
-      await expect(
-        similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY })
-      ).rejects.toThrow(/Could not resolve app id "com.nonexistent.app": Bundle not found/);
+      const err = await similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY }).catch((e) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect(err.message).toBe('Could not resolve app id "com.nonexistent.app": App not found');
+      expect(err.status).toBe(404);
     });
 
-    it('error wrapping preserves cause', async () => {
+    it('wraps non-HttpError with cause preserved', async () => {
       const originalError = new Error('Bundle not found');
       vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
 
       const err = await similar({ appId: 'com.test', country: DEFAULT_COUNTRY }).catch((e) => e);
+      expect(err).not.toBeInstanceOf(HttpError);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Could not resolve app id "com.test": Bundle not found');
       expect(err.cause).toBe(originalError);
     });
 

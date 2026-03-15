@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { reviews } from '../lib/reviews.js';
 import * as common from '../lib/common.js';
 import { sort as sortConstants } from '../types/constants.js';
-import { ValidationError } from '../lib/errors.js';
+import { HttpError, ValidationError } from '../lib/errors.js';
 
 vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
@@ -136,12 +136,13 @@ describe('reviews', () => {
       expect(result).toHaveLength(1);
     });
 
-    it('throws with cause when resolveAppId fails', async () => {
-      vi.mocked(common.resolveAppId).mockRejectedValue(new Error('App not found'));
+    it('throws HttpError preserving status when resolveAppId fails with HttpError', async () => {
+      vi.mocked(common.resolveAppId).mockRejectedValue(new HttpError('App not found', 404));
 
-      await expect(reviews({ appId: 'com.nonexistent.app' })).rejects.toThrow(
-        'Could not resolve app id "com.nonexistent.app": App not found'
-      );
+      const err = await reviews({ appId: 'com.nonexistent.app' }).catch((e) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect(err.message).toBe('Could not resolve app id "com.nonexistent.app": App not found');
+      expect(err.status).toBe(404);
     });
   });
 
@@ -154,11 +155,14 @@ describe('reviews', () => {
     );
   });
 
-  it('reviews error wrapping preserves cause', async () => {
-    const originalError = new Error('App not found');
+  it('wraps non-HttpError in generic Error with cause preserved', async () => {
+    const originalError = new Error('Network timeout');
     vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
 
     const err = await reviews({ appId: 'com.test', page: 1 } as Parameters<typeof reviews>[0]).catch((e) => e);
+    expect(err).not.toBeInstanceOf(HttpError);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('Could not resolve app id "com.test": Network timeout');
     expect(err.cause).toBe(originalError);
   });
 
@@ -246,6 +250,77 @@ describe('reviews', () => {
         expect(r.score).toBeLessThanOrEqual(5);
         expect(Number.isNaN(r.score)).toBe(false);
       }
+    });
+  });
+
+  describe('metadata filtering (single-review bug fix)', () => {
+    it('returns the review when feed has only one review and no metadata entry', async () => {
+      const feed = {
+        feed: {
+          entry: {
+            id: { label: 'r1' },
+            author: { name: { label: 'Solo User' } },
+            'im:version': { label: '1.0' },
+            'im:rating': { label: '5' },
+            title: { label: 'Only review' },
+            content: { label: 'Great' },
+            updated: { label: '2025-01-01' },
+          },
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(feed));
+
+      const result = await reviews({ id: 553834731, page: 1 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.title).toBe('Only review');
+      expect(result[0]!.score).toBe(5);
+    });
+
+    it('returns the review when feed has metadata entry followed by one review', async () => {
+      const feed = {
+        feed: {
+          entry: [
+            { id: { label: 'app-meta' }, title: { label: 'App Name' } },
+            {
+              id: { label: 'r1' },
+              author: { name: { label: 'User' } },
+              'im:version': { label: '1.0' },
+              'im:rating': { label: '3' },
+              title: { label: 'Review' },
+              content: { label: 'OK' },
+              updated: { label: '' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(feed));
+
+      const result = await reviews({ id: 553834731, page: 1 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.score).toBe(3);
+    });
+
+    it('returns empty array when feed has only a metadata entry (no reviews)', async () => {
+      const feed = {
+        feed: {
+          entry: { id: { label: 'app-meta' }, title: { label: 'App' } },
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(feed));
+
+      const result = await reviews({ id: 553834731, page: 1 });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('returns empty array when feed has no entries', async () => {
+      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify({ feed: {} }));
+
+      const result = await reviews({ id: 553834731, page: 1 });
+
+      expect(result).toHaveLength(0);
     });
   });
 

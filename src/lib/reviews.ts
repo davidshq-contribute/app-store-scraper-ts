@@ -8,7 +8,7 @@ import {
   parseJson,
   resolveAppId,
 } from './common.js';
-import { ValidationError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
 import { validateCountry, validateSort, validateReviewsPage } from './validate.js';
 import { reviewsFeedSchema } from './schemas.js';
 
@@ -17,8 +17,7 @@ import { reviewsFeedSchema } from './schemas.js';
  * @param options - Options including app id, pagination, and sorting
  * @returns Promise resolving to array of reviews
  * @throws {ValidationError} if neither `id` nor `appId` is provided, `country`/`sort`/`page` are invalid, or API response validation fails (field: `'response'`)
- * @throws {HttpError} on non-OK HTTP response from the reviews RSS feed
- * @throws {Error} if `appId` cannot be resolved to a numeric ID (wraps original error as `cause`)
+ * @throws {HttpError} on non-OK HTTP response from the reviews RSS feed, or if `appId` cannot be resolved (preserves original status/url)
  *
  * @example
  * ```typescript
@@ -60,10 +59,11 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      throw new Error(
-        `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`,
-        { cause: err }
-      );
+      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
+      if (err instanceof HttpError) {
+        throw new HttpError(message, err.status, err.url);
+      }
+      throw new Error(message, { cause: err });
     }
   }
 
@@ -93,8 +93,11 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   // Extract entries (can be single object or array)
   const entries = ensureArray(data.feed?.entry);
 
-  // Skip the first entry as it's typically app metadata
-  const reviewEntries = entries.slice(1);
+  // Filter out the app metadata entry. The feed typically includes one metadata
+  // entry (app info) that lacks 'author'; real reviews always have an author.
+  // Previous code used slice(1) which silently dropped the only review for
+  // single-review apps.
+  const reviewEntries = entries.filter((entry) => entry.author != null);
 
   return reviewEntries.map((entry) => {
     const label = entry['im:rating']?.label;

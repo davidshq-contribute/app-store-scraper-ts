@@ -67,44 +67,74 @@ export function parseRatings(html: string): Ratings {
   const totalRatings =
     Array.isArray(ratingsMatch) && ratingsMatch[0] ? parseInt(ratingsMatch[0], 10) : 0;
 
-  // Extract ratings by star. Assumes the page renders bars in descending order
-  // (5★, 4★, 3★, 2★, 1★). We do not verify per-row labels; if Apple changes
-  // to ascending order, the histogram would be silently inverted. Slice to
-  // exactly 5 so starRating = 5 - index is always 1–5 (avoids 0/-1 with wrong
-  // element count).
-  const rawByStar: number[] = $('.vote .total')
-    .map((_, el) => {
-      const n = parseInt($(el).text(), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })
-    .get();
-  const ratingsByStar = rawByStar.slice(0, 5);
+  // Extract per-row vote elements. Each .vote row has a .total with the count.
+  // We try to detect the star rating from labels in the row (aria-label, text
+  // containing a digit like "5 stars") to avoid relying on positional order.
+  const voteRows = $('.vote');
+  const warnings: string[] = [];
 
-  // Build histogram. Bars are in descending order (5★…1★); index 0 → 5, index 4 → 1.
-  // Derive key from index via tuple so type is 1|2|3|4|5 without assertion.
-  const STAR_KEYS = [1, 2, 3, 4, 5] as const;
-  const histogram: RatingHistogram = ratingsByStar.reduce<RatingHistogram>(
-    (acc, ratingsForStar, index) => {
-      const starRating = STAR_KEYS[4 - index];
-      if (starRating === undefined) {
-        throw new Error(`Unexpected rating index: ${index}`);
+  // Attempt label-based extraction: look for a star number in each row's
+  // aria-label or text content (e.g. "5 stars", "5 Stars", aria-label="5").
+  const STAR_LABEL_RE = /\b([1-5])\s*star/i;
+  const STAR_ARIA_RE = /\b([1-5])\b/;
+  const labeledEntries: Array<{ star: number; count: number }> = [];
+
+  voteRows.each((_, row) => {
+    const $row = $(row);
+    const countText = $row.find('.total').text();
+    const count = Number.isNaN(parseInt(countText, 10)) ? 0 : parseInt(countText, 10);
+
+    // Try aria-label on the row or its children, then fall back to text matching
+    const ariaLabel = $row.attr('aria-label') ?? $row.find('[aria-label]').attr('aria-label') ?? '';
+    const textMatch = ariaLabel.match(STAR_LABEL_RE) ?? $row.text().match(STAR_LABEL_RE);
+    const ariaMatch = !textMatch ? ariaLabel.match(STAR_ARIA_RE) : null;
+    const match = textMatch ?? ariaMatch;
+
+    if (match?.[1]) {
+      labeledEntries.push({ star: parseInt(match[1], 10), count });
+    }
+  });
+
+  const histogram: RatingHistogram = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const validStars = new Set([1, 2, 3, 4, 5]);
+
+  // Check if label-based extraction found all 5 unique star ratings
+  const labeledStars = new Set(labeledEntries.map((e) => e.star));
+  const hasAllLabels = validStars.size === labeledStars.size && [...validStars].every((s) => labeledStars.has(s));
+
+  if (hasAllLabels) {
+    // Use label-based mapping (order-independent)
+    for (const entry of labeledEntries) {
+      if (entry.star >= 1 && entry.star <= 5) {
+        histogram[entry.star as 1 | 2 | 3 | 4 | 5] = entry.count;
       }
-      acc[starRating] = ratingsForStar;
-      return acc;
-    },
-    { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  );
+    }
+  } else {
+    // Fall back to positional assumption: descending order (5★, 4★, 3★, 2★, 1★).
+    const rawByStar: number[] = $('.vote .total')
+      .map((_, el) => {
+        const n = parseInt($(el).text(), 10);
+        return Number.isNaN(n) ? 0 : n;
+      })
+      .get();
+    const ratingsByStar = rawByStar.slice(0, 5);
+
+    const STAR_KEYS = [1, 2, 3, 4, 5] as const;
+    for (let index = 0; index < ratingsByStar.length; index++) {
+      const starRating = STAR_KEYS[4 - index];
+      if (starRating !== undefined) {
+        histogram[starRating] = ratingsByStar[index]!;
+      }
+    }
+  }
 
   // Sanity check: histogram sum should match total when we have a total.
-  // Catches structural changes (e.g. wrong number of .vote .total elements).
-  // Does not detect order flip (5↔1); that would require per-row labels in HTML.
-  // On mismatch, return parsed result with a warning; consumers control logging.
   const histogramSum = histogram[1] + histogram[2] + histogram[3] + histogram[4] + histogram[5];
   const mismatch = totalRatings > 0 && histogramSum !== totalRatings;
-  const warnings = mismatch
-    ? [
-        `Ratings histogram sum (${histogramSum}) does not match total count (${totalRatings}). Data may be inconsistent.`,
-      ]
-    : undefined;
-  return { ratings: totalRatings, histogram, ...(warnings && { warnings }) };
+  if (mismatch) {
+    warnings.push(
+      `Ratings histogram sum (${histogramSum}) does not match total count (${totalRatings}). Data may be inconsistent.`
+    );
+  }
+  return { ratings: totalRatings, histogram, ...(warnings.length > 0 && { warnings }) };
 }

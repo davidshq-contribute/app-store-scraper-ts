@@ -17,8 +17,7 @@ export { getLinkTypeFromHeadingText };
  * @param options - Options including app id or appId, and optional `includeLinkType`
  * @returns Promise resolving to `App[]` (default) or `SimilarApp[]` when `includeLinkType: true`
  * @throws {ValidationError} if neither `id` nor `appId` is provided, or if `country` is invalid
- * @throws {HttpError} on non-404 HTTP errors from the App Store page
- * @throws {Error} if `appId` cannot be resolved to a numeric ID (wraps original error as `cause`)
+ * @throws {HttpError} on non-404 HTTP errors from the App Store page, or if `appId` cannot be resolved (preserves original status/url)
  *
  * @example
  * ```typescript
@@ -56,10 +55,11 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      throw new Error(
-        `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`,
-        { cause: err }
-      );
+      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
+      if (err instanceof HttpError) {
+        throw new HttpError(message, err.status, err.url);
+      }
+      throw new Error(message, { cause: err });
     }
   }
 

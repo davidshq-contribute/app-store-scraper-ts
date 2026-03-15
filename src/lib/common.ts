@@ -273,14 +273,14 @@ export async function lookup(
  *
  * @param options - Must include `appId` (bundle ID); optional `country`, `requestOptions`
  * @returns The numeric track ID
- * @throws Error if the app is not found
+ * @throws HttpError (404) if the app is not found
  */
 export async function resolveAppId(options: ResolveAppIdOptions): Promise<number> {
   const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
   validateCountry(country);
   const apps = await lookup(appId, 'bundleId', country, undefined, requestOptions);
   if (apps.length === 0) {
-    throw new Error(`App not found: ${appId}`);
+    throw new HttpError(`App not found: ${appId}`, 404);
   }
   return apps[0]!.id;
 }

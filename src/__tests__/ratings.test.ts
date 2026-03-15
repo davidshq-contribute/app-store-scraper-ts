@@ -103,6 +103,97 @@ describe('parseRatings', () => {
   });
 });
 
+/** Build HTML with aria-label on each .vote row indicating star rating. */
+function labeledFixtureHtml(
+  totalCount: number,
+  entries: Array<{ star: number; count: number }>
+): string {
+  const ratingCount = `<div class="rating-count">${totalCount}</div>`;
+  const votes = entries
+    .map(
+      (e) =>
+        `<span class="vote" aria-label="${e.star} star">`
+        + `<span class="total">${e.count}</span></span>`
+    )
+    .join('');
+  return `<div>${ratingCount}${votes}</div>`;
+}
+
+describe('parseRatings label-based extraction', () => {
+  it('uses aria-label star ratings when all 5 labels are present (descending)', () => {
+    const html = labeledFixtureHtml(100, [
+      { star: 5, count: 50 },
+      { star: 4, count: 20 },
+      { star: 3, count: 15 },
+      { star: 2, count: 10 },
+      { star: 1, count: 5 },
+    ]);
+    const result = parseRatings(html);
+    expect(result.histogram).toEqual({ 1: 5, 2: 10, 3: 15, 4: 20, 5: 50 });
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('correctly parses ascending order when labels are present (no inversion)', () => {
+    const html = labeledFixtureHtml(100, [
+      { star: 1, count: 5 },
+      { star: 2, count: 10 },
+      { star: 3, count: 15 },
+      { star: 4, count: 20 },
+      { star: 5, count: 50 },
+    ]);
+    const result = parseRatings(html);
+    // Without labels this would silently invert; with labels, order is correct
+    expect(result.histogram).toEqual({ 1: 5, 2: 10, 3: 15, 4: 20, 5: 50 });
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('correctly parses arbitrary order when labels are present', () => {
+    const html = labeledFixtureHtml(30, [
+      { star: 3, count: 10 },
+      { star: 5, count: 8 },
+      { star: 1, count: 2 },
+      { star: 4, count: 6 },
+      { star: 2, count: 4 },
+    ]);
+    const result = parseRatings(html);
+    expect(result.histogram).toEqual({ 1: 2, 2: 4, 3: 10, 4: 6, 5: 8 });
+  });
+
+  it('parses "N Stars" text in row content (case-insensitive)', () => {
+    const html = `<div>
+      <div class="rating-count">15</div>
+      <span class="vote">5 Stars<span class="total">5</span></span>
+      <span class="vote">4 Stars<span class="total">4</span></span>
+      <span class="vote">3 Stars<span class="total">3</span></span>
+      <span class="vote">2 Stars<span class="total">2</span></span>
+      <span class="vote">1 Star<span class="total">1</span></span>
+    </div>`;
+    const result = parseRatings(html);
+    expect(result.histogram).toEqual({ 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 });
+  });
+
+  it('falls back to positional when labels are missing', () => {
+    // No aria-labels or star text — should use positional (descending) assumption
+    const html = fixtureHtml(100, 50, 20, 15, 10, 5);
+    const result = parseRatings(html);
+    expect(result.histogram).toEqual({ 1: 5, 2: 10, 3: 15, 4: 20, 5: 50 });
+  });
+
+  it('falls back to positional when only some labels are present', () => {
+    const html = `<div>
+      <div class="rating-count">15</div>
+      <span class="vote" aria-label="5 star"><span class="total">5</span></span>
+      <span class="vote"><span class="total">4</span></span>
+      <span class="vote"><span class="total">3</span></span>
+      <span class="vote"><span class="total">2</span></span>
+      <span class="vote"><span class="total">1</span></span>
+    </div>`;
+    const result = parseRatings(html);
+    // Positional: first element = 5★, last = 1★
+    expect(result.histogram).toEqual({ 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 });
+  });
+});
+
 describe('ratings()', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
