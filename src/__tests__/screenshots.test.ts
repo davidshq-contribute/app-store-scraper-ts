@@ -24,7 +24,7 @@ describe('screenshots', () => {
         expect(extractScreenshotUrl(srcset)).toContain('/bar/');
       });
 
-      it('preserves jpg and png extensions', () => {
+      it('preserves jpg, png, and avif extensions', () => {
         expect(extractScreenshotUrl(`${base}.jpg 100w`)).toBe(
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.jpg'
         );
@@ -33,6 +33,9 @@ describe('screenshots', () => {
         );
         expect(extractScreenshotUrl(`${base}.png 100w`)).toBe(
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.png'
+        );
+        expect(extractScreenshotUrl(`${base}.avif 100w`)).toBe(
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.avif'
         );
       });
 
@@ -123,14 +126,46 @@ describe('screenshots', () => {
         expect(out.ipadScreenshots).toEqual([]);
       });
 
-      it('only matches source[type="image/webp"] inside the correct ul', () => {
+      it('does not cross-contaminate between screenshot containers', () => {
         const html =
           fixtureShelf('shelf-grid__list--grid-type-ScreenshotPhone', sampleSrcset) +
-          '<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPad">' +
-          '<source type="image/jpeg" srcset="https://other.com/bar.jpg 1w"></source></ul>';
+          `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPad">
+            <li><picture><source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/bar/100x100bb.jpg 1w"></source></picture></li>
+          </ul>`;
         const out = parseScreenshotsFromHtml(html);
         expect(out.screenshots).toHaveLength(1);
-        expect(out.ipadScreenshots).toEqual([]);
+        expect(out.ipadScreenshots).toHaveLength(1);
+        expect(out.ipadScreenshots[0]).toMatch(/392x696bb\.jpg$/);
+      });
+
+      it('falls back to non-webp source when webp is absent', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture><source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.jpg 100w"></source></picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/392x696bb\.jpg$/);
+      });
+
+      it('prefers webp source over jpeg when both are present', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture>
+            <source type="image/webp" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp 100w">
+            <source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.jpg 100w">
+          </picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/\.webp$/);
+      });
+
+      it('falls back to img element when no source elements exist', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture><img src="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.png"></picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/392x696bb\.png$/);
       });
     });
   });
@@ -170,7 +205,7 @@ describe('screenshots', () => {
           // Verify the screenshot URLs are valid (format preserved: webp, jpg, png)
           result.screenshots.forEach((url) => {
             expect(url).toMatch(/^https:\/\/is\d+-ssl\.mzstatic\.com/);
-            expect(url).toMatch(/\.(webp|jpg|jpeg|png)$/i);
+            expect(url).toMatch(/\.(webp|jpg|jpeg|png|avif)$/i);
           });
         }
       );

@@ -34,10 +34,10 @@ export function extractScreenshotUrl(srcset: string): string | null {
   const best = entries[0];
 
   if (best?.url) {
-    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png).
+    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png, avif).
     // Optional (\\?.*)? allows Apple CDN query params (e.g. ?q=80) so normalization still matches.
     return best.url.replace(
-      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)(\?.*)?$/i,
+      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png|avif)(\?.*)?$/i,
       (
         _match: string,
         _opt: string | undefined,
@@ -74,29 +74,26 @@ export function parseScreenshotsFromHtml(html: string): {
   // iPad screenshots: shelf-grid__list--grid-type-ScreenshotPad
   // Apple TV screenshots: shelf-grid__list--grid-type-ScreenshotAppleTv
 
-  $('ul.shelf-grid__list--grid-type-ScreenshotPhone source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) screenshots.add(screenshotUrl);
-    }
-  });
+  // Extract one screenshot URL per <picture>, preferring webp but falling
+  // back to any <source> or <img> when the webp variant is absent.
+  function collectFromContainer(selector: string, target: Set<string>): void {
+    $(`${selector} picture`).each((_, pictureEl) => {
+      const $pic = $(pictureEl);
+      const srcset =
+        $pic.find('source[type="image/webp"]').attr('srcset') ??
+        $pic.find('source[srcset]').attr('srcset') ??
+        $pic.find('img').attr('srcset') ??
+        $pic.find('img').attr('src');
+      if (srcset) {
+        const screenshotUrl = extractScreenshotUrl(srcset);
+        if (screenshotUrl) target.add(screenshotUrl);
+      }
+    });
+  }
 
-  $('ul.shelf-grid__list--grid-type-ScreenshotPad source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) ipadScreenshots.add(screenshotUrl);
-    }
-  });
-
-  $('ul.shelf-grid__list--grid-type-ScreenshotAppleTv source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) appletvScreenshots.add(screenshotUrl);
-    }
-  });
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotPhone', screenshots);
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotPad', ipadScreenshots);
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotAppleTv', appletvScreenshots);
 
   return {
     screenshots: Array.from(screenshots),
@@ -203,9 +200,14 @@ export async function app(options: AppOptions): Promise<App> {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
       result = { ...result, histogram: ratingsData.histogram };
     } catch (error) {
-      // 404 = ratings endpoint not found; 200 + RATINGS_EMPTY_MESSAGE = 200 OK but empty body. Continue without histogram.
+      // 404 = ratings endpoint not found; 200 + RATINGS_EMPTY_MESSAGE = empty body.
+      // Only these cases are swallowed; other errors (500, network, etc.) propagate.
       if (
-        !(error instanceof HttpError && (error.status === 404 || (error.status === 200 && error.message === RATINGS_EMPTY_MESSAGE)))
+        !(
+          error instanceof HttpError &&
+          (error.status === 404 ||
+            (error.status === 200 && error.message === RATINGS_EMPTY_MESSAGE))
+        )
       ) {
         throw error;
       }

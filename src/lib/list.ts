@@ -88,7 +88,9 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  * feed—no extra lookup requests. When `fullDetail: true`, fetches full details via the lookup API
  * and returns {@link App[]}.
  *
- * @param options - Options for filtering and pagination
+ * @param options - Options for filtering and pagination.
+ *   **Note:** `lang` only takes effect when `fullDetail: true` (passed to the lookup API).
+ *   The RSS feed endpoint used for `fullDetail: false` does not support a language parameter.
  * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true.
  *   If `fullDetail` is a boolean variable, the return type is {@link ListApp[]} | {@link App[]}.
  * @throws {ValidationError} if `country`, `collection`, `category`, or `num` are invalid

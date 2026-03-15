@@ -312,7 +312,7 @@ export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
  */
 export function validateRequiredField<T extends object>(
   options: T,
-  fields: string[],
+  fields: (keyof T & string)[],
   errorMessage: string
 ): void {
   const opts = options as Record<string, unknown>;
