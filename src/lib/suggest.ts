@@ -1,5 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { Suggestion } from '../types/review.js';
+import type { Suggestion } from '../types/suggest.js';
 import type { SuggestOptions } from '../types/options.js';
 import { doRequest, ensureArray } from './common.js';
 import { ValidationError } from './errors.js';
@@ -30,7 +30,8 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
     throw new ValidationError('term is required', 'term');
   }
 
-  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?clientApplication=Software&term=${encodeURIComponent(term)}`;
+  const params = new URLSearchParams({ clientApplication: 'Software', term });
+  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?${params}`;
 
   const body = await doRequest(url, requestOptions);
 

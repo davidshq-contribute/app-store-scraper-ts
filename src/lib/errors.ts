@@ -1,6 +1,5 @@
 /**
- * Error thrown when an HTTP request fails with a non-OK status, or when a response
- * is 200 OK but has no usable body (caller should check status and message; see e.g. ratings module).
+ * Error thrown when an HTTP request fails with a non-OK status.
  * Extends Error so existing `catch (err)` and `err.message` checks keep working.
  * Use `error.status` (and optionally `error.url`) for structured handling instead of parsing the message.
  *
@@ -10,9 +9,6 @@
  * } catch (err) {
  *   if (err instanceof HttpError && err.status === 404) {
  *     // handle not found
- *   }
- *   if (err instanceof HttpError && err.status === 200 && err.message === 'No ratings data returned') {
- *     // handle 200 OK but empty body (e.g. ratings endpoint; see ratings.RATINGS_EMPTY_MESSAGE)
  *   }
  *   throw err;
  * }
@@ -34,6 +30,36 @@ export class HttpError extends Error {
     // Stryker disable all: captureStackTrace is a V8 stack-trace optimization, not behavioral
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, HttpError);
+    }
+    // Stryker restore all
+  }
+}
+
+/**
+ * Error thrown when the ratings endpoint returns 200 OK but the body is empty
+ * (no parseable data). Extends {@link HttpError} so existing `catch (err)`
+ * handling that checks `instanceof HttpError` keeps working.
+ *
+ * Use `instanceof RatingsEmptyError` instead of matching on the error message
+ * string — this is refactoring-safe and compiler-checked.
+ *
+ * @example
+ * try {
+ *   await ratings({ id: 123 });
+ * } catch (err) {
+ *   if (err instanceof RatingsEmptyError) {
+ *     // no ratings data available
+ *   }
+ * }
+ */
+export class RatingsEmptyError extends HttpError {
+  constructor(url?: string) {
+    super('No ratings data returned', 200, url);
+    Object.setPrototypeOf(this, RatingsEmptyError.prototype);
+    this.name = 'RatingsEmptyError';
+    // Stryker disable all: captureStackTrace is a V8 stack-trace optimization, not behavioral
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, RatingsEmptyError);
     }
     // Stryker restore all
   }

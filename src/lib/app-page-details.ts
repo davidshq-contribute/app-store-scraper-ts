@@ -8,10 +8,10 @@
  * @see docs/DEV-DECISIONS.md (App page consolidation)
  */
 import * as cheerio from 'cheerio';
-import type { PrivacyDetails, VersionHistory } from '../types/review.js';
+import type { PrivacyDetails, VersionHistory } from '../types/app-details.js';
 import type { RequestOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { appPageUrl, doRequest } from './common.js';
+import { appPageUrl, doRequest, validateRequiredField, resolveAppId } from './common.js';
 import { validateCountry } from './validate.js';
 import { HttpError, ValidationError } from './errors.js';
 import {
@@ -23,8 +23,10 @@ import {
 
 /** Options for appPageDetails(). */
 export interface AppPageDetailsOptions {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID */
+  id?: number;
+  /** Bundle ID (e.g., com.example.app) */
+  appId?: string;
   /** Two-letter country code (default: us) */
   country?: string;
   /** Custom request options */
@@ -50,25 +52,41 @@ export interface AppPageDetailsResult {
  * If you only need privacy, `privacy()` is simpler; if you need full similar apps with lookup,
  * use `similar()`.
  *
- * @param options - id (required), country, requestOptions
+ * @param options - id or appId (required), country, requestOptions
  * @returns Combined result; 404 returns empty privacy, similarIds, and versionHistory
- * @throws On non-404 fetch errors
+ * @throws {ValidationError} if neither `id` nor `appId` is provided, or if `country` is invalid
+ * @throws {HttpError} on non-404 fetch errors, or if `appId` cannot be resolved
  *
  * @example
  * ```typescript
  * const { privacy, similarIds, versionHistory } = await appPageDetails({ id: 553834731 });
- * // Store privacy, use similarIds for discovery, etc.
+ * const { privacy, similarIds, versionHistory } = await appPageDetails({ appId: 'com.example.app' });
  * ```
  */
 export async function appPageDetails(
   options: AppPageDetailsOptions
 ): Promise<AppPageDetailsResult> {
-  const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
+  validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
+
+  const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
+  validateCountry(country);
+  let { id } = options;
+
+  if (appId != null && id == null) {
+    try {
+      id = await resolveAppId({ appId, country, requestOptions });
+    } catch (err) {
+      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
+      if (err instanceof HttpError) {
+        throw new HttpError(message, err.status, err.url);
+      }
+      throw new Error(message, { cause: err });
+    }
+  }
 
   if (id == null) {
-    throw new ValidationError('id is required', 'id');
+    throw new ValidationError('Either id or appId is required', 'id/appId');
   }
-  validateCountry(country);
 
   const url = appPageUrl(country, id);
   let body: string;

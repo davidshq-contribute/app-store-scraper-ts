@@ -15,6 +15,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     doRequest: vi.fn(),
+    resolveAppId: vi.fn(),
   };
 });
 
@@ -53,24 +54,57 @@ const EMPTY_HTML = `<!DOCTYPE html><html><body><p>No privacy info</p></body></ht
 describe('privacy', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.resolveAppId).mockReset();
   });
 
   describe('validation', () => {
-    it('throws ValidationError when id is missing', async () => {
-      await expect(privacy({ id: undefined as unknown as number })).rejects.toThrow(
-        ValidationError
-      );
-      await expect(privacy({ id: undefined as unknown as number })).rejects.toThrow(
-        'id is required'
-      );
-    });
-
-    it('throws ValidationError when id is null', async () => {
-      await expect(privacy({ id: null as unknown as number })).rejects.toThrow(ValidationError);
+    it('throws ValidationError when neither id nor appId is provided', async () => {
+      await expect(privacy({} as never)).rejects.toThrow(ValidationError);
+      await expect(privacy({} as never)).rejects.toThrow('Either id or appId is required');
     });
 
     it('throws ValidationError for invalid country', async () => {
       await expect(privacy({ id: 123, country: 'zz' })).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('appId resolution', () => {
+    it('resolves appId to numeric id before fetching', async () => {
+      vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
+      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+      await privacy({ appId: 'com.example.app' });
+
+      expect(common.resolveAppId).toHaveBeenCalledWith({
+        appId: 'com.example.app',
+        country: DEFAULT_COUNTRY,
+        requestOptions: undefined,
+      });
+      expect(common.doRequest).toHaveBeenCalledWith(
+        expect.stringContaining('id553834731'),
+        undefined
+      );
+    });
+
+    it('throws HttpError when appId resolution fails with 404', async () => {
+      vi.mocked(common.resolveAppId).mockRejectedValue(
+        new HttpError('App not found: com.nonexistent', 404)
+      );
+
+      await expect(privacy({ appId: 'com.nonexistent' })).rejects.toThrow(HttpError);
+      await expect(privacy({ appId: 'com.nonexistent' })).rejects.toThrow('Could not resolve app id');
+    });
+
+    it('prefers id over appId when both are provided', async () => {
+      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+      await privacy({ id: 123, appId: 'com.example.app' });
+
+      expect(common.resolveAppId).not.toHaveBeenCalled();
+      expect(common.doRequest).toHaveBeenCalledWith(
+        expect.stringContaining('id123'),
+        undefined
+      );
     });
   });
 

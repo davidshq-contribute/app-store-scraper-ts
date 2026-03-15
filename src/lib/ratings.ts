@@ -2,19 +2,16 @@ import * as cheerio from 'cheerio';
 import type { Ratings, RatingHistogram } from '../types/app.js';
 import type { RatingsOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, storeId } from './common.js';
+import { doRequest, storeId, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError, ValidationError } from './errors.js';
-
-/** Message used when the ratings endpoint returns 200 OK but an empty body (no parseable data). */
-export const RATINGS_EMPTY_MESSAGE = 'No ratings data returned';
+import { RatingsEmptyError } from './errors.js';
 
 /**
  * Retrieves the rating histogram for an app (1-5 star breakdown).
  *
  * @param options - Options including app id
  * @returns Promise resolving to ratings with total count and histogram
- * @throws {HttpError} When the response is 200 OK but the body is empty, throws with {@link RATINGS_EMPTY_MESSAGE} and `status: 200`. Use `err instanceof HttpError && err.status === 200` to treat as "no data".
+ * @throws {RatingsEmptyError} When the response is 200 OK but the body is empty. Use `err instanceof RatingsEmptyError` to treat as "no data".
  *
  * `requestOptions.headers` can override the default `X-Apple-Store-Front` header; this is intentional for advanced use cases (e.g. store-specific or regional testing).
  *
@@ -28,10 +25,8 @@ export const RATINGS_EMPTY_MESSAGE = 'No ratings data returned';
 export async function ratings(options: RatingsOptions): Promise<Ratings> {
   const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
+  validateRequiredField(options, ['id'], 'id is required');
   validateCountry(country);
-  if (id == null) {
-    throw new ValidationError('id is required', 'id');
-  }
 
   const storeFront = storeId(country);
   const url = `https://itunes.apple.com/${country}/customer-reviews/id${id}?displayable-kind=11`;
@@ -45,7 +40,7 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
   });
 
   if (html.length === 0) {
-    throw new HttpError(RATINGS_EMPTY_MESSAGE, 200, url);
+    throw new RatingsEmptyError(url);
   }
 
   return parseRatings(html);

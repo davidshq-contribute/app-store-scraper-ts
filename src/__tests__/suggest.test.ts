@@ -62,7 +62,7 @@ describe('suggest', () => {
     );
     const url = vi.mocked(common.doRequest).mock.calls[0]![0];
     expect(url).toContain('clientApplication=Software');
-    expect(url).toContain('term=hello%20world');
+    expect(url).toContain('term=hello+world');
   });
 
   it('returns empty array when arrayData is a raw string', async () => {

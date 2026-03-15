@@ -2,7 +2,6 @@ import type { App } from '../types/app.js';
 import {
   BODY_PREVIEW_MAX_LEN,
   DEFAULT_COUNTRY,
-  DEFAULT_STORE_FRONT_ID,
   markets,
 } from '../types/constants.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
@@ -12,6 +11,21 @@ import { validateCountry } from './validate.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 0;
+
+/**
+ * Valid `kind` values for app records returned by the iTunes API.
+ * - `software` — iOS / universal apps
+ * - `mac-software` — Mac App Store apps
+ */
+const APP_KINDS = new Set(['software', 'mac-software']);
+
+/**
+ * Returns true if the iTunes API record represents an app (as opposed to an
+ * artist, audiobook, etc.). Matches on `kind` or `wrapperType`.
+ */
+export function isAppRecord(record: { kind?: string; wrapperType?: string }): boolean {
+  return APP_KINDS.has(record.kind ?? '') || APP_KINDS.has(record.wrapperType ?? '');
+}
 
 /**
  * Builds the App Store app page URL for a given country and numeric app (track) id.
@@ -44,6 +58,15 @@ function hasStatus(x: unknown): x is { status: number } {
   );
 }
 // Stryker restore all
+
+/**
+ * Returns a jittered exponential backoff delay in milliseconds.
+ * Formula: `base * 2^attempt * random(0.5 … 1.0)` — "equal jitter" strategy.
+ * @internal
+ */
+function backoffMs(attempt: number, baseMs = 1000): number {
+  return baseMs * 2 ** attempt * (0.5 + Math.random() * 0.5);
+}
 
 /**
  * Makes an HTTP GET request with optional timeout and retries.
@@ -100,7 +123,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
         if (attempt < maxRetries && isRetryable(response.status)) {
           // Consume body so the connection can be reused (fetch spec / connection pooling).
           await response.text().catch(() => '');
-          const delayMs = 1000 * 2 ** attempt;
+          const delayMs = backoffMs(attempt);
           await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
@@ -129,12 +152,15 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
 
 /**
  * Parses a string as JSON and returns the result as unknown.
- * On parse failure, throws a clear error including optional status and a short body preview for debugging.
+ * On parse failure, throws an {@link HttpError} including the response status and a
+ * short body preview for debugging. This ensures consumers catching `HttpError` will
+ * handle malformed responses the same way they handle HTTP failures.
  *
  * @param body - Raw response body string
- * @param context - Optional context (e.g. response status) for error messages
+ * @param context - Optional context (e.g. response status) for error messages; status
+ *   defaults to 200 since callers invoke this after a successful `doRequest`
  * @returns Parsed value as unknown
- * @throws Error with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
+ * @throws HttpError with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
  * @internal
  */
 export function parseJson(body: string, context?: { status?: number }): unknown {
@@ -142,10 +168,13 @@ export function parseJson(body: string, context?: { status?: number }): unknown 
     return JSON.parse(body) as unknown;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const statusPart = context?.status != null ? ` (status ${context.status})` : '';
+    const status = context?.status ?? 200;
     const bodyPreview =
       body.length > BODY_PREVIEW_MAX_LEN ? `${body.slice(0, BODY_PREVIEW_MAX_LEN)}...` : body;
-    throw new Error(`Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`);
+    throw new HttpError(
+      `Invalid JSON response (status ${status}): ${msg}. Body preview: ${bodyPreview}`,
+      status
+    );
   }
 }
 
@@ -258,11 +287,9 @@ export async function lookup(
 
   const response = validationResult.data;
 
-  // Filter to only software and clean the results
-  // The response may include artist records (wrapperType: "artist") and app records
-  // We only want apps, which have kind === 'software' or wrapperType === 'software'
+  // Filter to app records only (excludes artist entries, audiobooks, etc.)
   return response.results
-    .filter((app) => app.kind === 'software' || app.wrapperType === 'software')
+    .filter((app) => isAppRecord(app))
     .map((app) => cleanApp(app));
 }
 
@@ -287,11 +314,16 @@ export async function resolveAppId(options: ResolveAppIdOptions): Promise<number
 
 /**
  * Gets the Apple Store ID for a given country code.
+ * Callers must validate the country code before calling this function.
  * @internal
+ * @throws {Error} if the country code is not recognized
  */
 export function storeId(country: string): number {
   const id = markets[country.toLowerCase()];
-  return id ?? DEFAULT_STORE_FRONT_ID;
+  if (id === undefined) {
+    throw new Error(`Unknown country code: ${country}`);
+  }
+  return id;
 }
 
 /**

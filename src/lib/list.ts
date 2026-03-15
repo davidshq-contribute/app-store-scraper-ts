@@ -93,6 +93,8 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  *   The RSS feed endpoint used for `fullDetail: false` does not support a language parameter.
  * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true.
  *   If `fullDetail` is a boolean variable, the return type is {@link ListApp[]} | {@link App[]}.
+ *   Feed entries with a missing or unparseable `im:id` are skipped; when this happens a
+ *   `console.warn` is emitted with the count of dropped entries.
  * @throws {ValidationError} if `country`, `collection`, `category`, or `num` are invalid
  * @throws {HttpError} on non-OK HTTP response from the iTunes RSS feed
  *
@@ -153,21 +155,33 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
 
   if (!fullDetail) {
     const result: ListApp[] = [];
+    let skipped = 0;
     for (const entry of entries) {
       const app = rssEntryToListApp(entry);
-      if (app) result.push(app);
+      if (app) {
+        result.push(app);
+      } else {
+        skipped++;
+      }
+    }
+    if (skipped > 0) {
+      console.warn(`list(): skipped ${skipped} feed entries with missing or invalid id`);
     }
     return result;
   }
 
-  const ids = entries
-    .map((entry) => {
-      const idStr = entry.id?.attributes?.['im:id'];
-      if (!idStr) return null;
-      const n = parseInt(idStr, 10);
-      return Number.isNaN(n) ? null : n;
-    })
-    .filter((id): id is number => id !== null);
+  const ids: number[] = [];
+  let skipped = 0;
+  for (const entry of entries) {
+    const idStr = entry.id?.attributes?.['im:id'];
+    if (!idStr) { skipped++; continue; }
+    const n = parseInt(idStr, 10);
+    if (Number.isNaN(n)) { skipped++; continue; }
+    ids.push(n);
+  }
+  if (skipped > 0) {
+    console.warn(`list(): skipped ${skipped} feed entries with missing or invalid id`);
+  }
 
   if (ids.length === 0) {
     return [];

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as common from '../lib/common.js';
 import { app } from '../lib/app.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, RatingsEmptyError } from '../lib/errors.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { runIntegrationTests } from './integration.js';
 
@@ -173,9 +173,9 @@ describe('app', () => {
       expect(result.id).toBe(12345);
     });
 
-    it('continues without histogram when ratings returns 200 with empty body', async () => {
+    it('continues without histogram when ratings returns RatingsEmptyError', async () => {
       vi.mocked(common.lookup).mockResolvedValueOnce([baseApp]);
-      vi.mocked(ratings).mockRejectedValueOnce(new HttpError('No ratings data returned', 200));
+      vi.mocked(ratings).mockRejectedValueOnce(new RatingsEmptyError());
 
       const result = await app({ id: 12345, country: DEFAULT_COUNTRY, ratings: true });
 

@@ -5,7 +5,7 @@
  * selector or structure changes only need to be made in one place.
  */
 import * as cheerio from 'cheerio';
-import type { PrivacyDetails, PrivacyType, VersionHistory } from '../types/review.js';
+import type { PrivacyDetails, PrivacyType, VersionHistory } from '../types/app-details.js';
 import type { SimilarLinkType } from '../types/app.js';
 
 /** Section heading text patterns (case-insensitive) mapped to linkType. */
@@ -105,6 +105,7 @@ export function parseSimilarIdsFromHtml(
   excludeId: number
 ): SimilarIdEntry[] {
   const entries: SimilarIdEntry[] = [];
+  const seen = new Set<string>();
   let currentLinkType: SimilarLinkType = 'other';
   let seenKnownSection = false;
 
@@ -121,7 +122,9 @@ export function parseSimilarIdsFromHtml(
           const match = href.match(/\/id(\d+)/);
           if (match && match[1]) {
             const appIdNum = parseInt(match[1], 10);
-            if (appIdNum !== excludeId) {
+            const key = `${appIdNum}:${currentLinkType}`;
+            if (appIdNum !== excludeId && !seen.has(key)) {
+              seen.add(key);
               entries.push({ id: appIdNum, linkType: currentLinkType });
             }
           }
@@ -144,6 +147,16 @@ export function parseSimilarIdsFromHtml(
  * Extracts version entries from dialog articles that contain a time[datetime]
  * element. Used by versionHistory() and appPageDetails().
  *
+ * **Selector assumptions (tightly coupled to Apple's current markup):**
+ * - Version entries live inside `dialog[data-testid="dialog"] article`.
+ * - Version number is a direct-child `<h4>` (`> h4`).
+ * - Release notes are direct-child `<p>` elements (`> p`). If Apple wraps
+ *   notes in a `<div>` or uses nested markup, notes will be empty or partial.
+ *   Multiple direct `<p>` children are concatenated by Cheerio's `.text()`.
+ * - Release date is read from `time[datetime]`.
+ *
+ * If the upstream markup changes, these selectors will need updating.
+ *
  * @param $ - Loaded cheerio instance
  * @returns Array of version history entries
  */
@@ -154,6 +167,7 @@ export function parseVersionHistoryFromHtml($: cheerio.CheerioAPI): VersionHisto
     const $article = $(element);
     if ($article.find('time[datetime]').length === 0) return;
 
+    // Direct-child selectors — see JSDoc for fragility notes.
     const releaseNotes = $article.find('> p').text().trim();
     const versionDisplay = $article.find('> h4').text().trim();
     const releaseDateRaw = $article.find('time').attr('datetime') ?? '';

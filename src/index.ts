@@ -12,7 +12,8 @@
  * **API methods:** `app`, `resolveAppId`, `list`, `search`, `developer`, `reviews`,
  * `ratings`, `similar`, `suggest`, `privacy`, `versionHistory`, `appPageDetails`
  *
- * **Errors:** `HttpError` (has `status` and `url`), `ValidationError` (has `field`)
+ * **Errors:** `HttpError` (has `status` and `url`), `RatingsEmptyError` (extends `HttpError`),
+ * `ValidationError` (has `field`)
  *
  * **Constants:** `collection`, `category`, `device`, `sort`, `markets`, `DEFAULT_COUNTRY`
  *
@@ -36,13 +37,13 @@ export { list } from './lib/list.js';
 export { search } from './lib/search.js';
 export { developer } from './lib/developer.js';
 export { reviews } from './lib/reviews.js';
-export { ratings, RATINGS_EMPTY_MESSAGE } from './lib/ratings.js';
+export { ratings } from './lib/ratings.js';
 export { similar } from './lib/similar.js';
 export { suggest } from './lib/suggest.js';
 export { privacy } from './lib/privacy.js';
 export { versionHistory } from './lib/version-history.js';
 export { appPageDetails } from './lib/app-page-details.js';
-export { HttpError, ValidationError } from './lib/errors.js';
+export { HttpError, RatingsEmptyError, ValidationError } from './lib/errors.js';
 
 // Export types
 export type {

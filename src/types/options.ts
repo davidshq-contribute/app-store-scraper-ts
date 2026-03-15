@@ -151,8 +151,10 @@ export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
  * Omits `lang`: the App Store page does not vary privacy labels by language parameter.
  */
 export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID */
+  id?: number;
+  /** Bundle ID (e.g., com.example.app) */
+  appId?: string;
 }
 
 /**
@@ -160,6 +162,8 @@ export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
  * Omits `lang`: the App Store page renders version history in the store's locale, not per-request.
  */
 export interface VersionHistoryOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID */
+  id?: number;
+  /** Bundle ID (e.g., com.example.app) */
+  appId?: string;
 }

@@ -15,6 +15,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     doRequest: vi.fn(),
+    resolveAppId: vi.fn(),
   };
 });
 
@@ -61,26 +62,44 @@ const EMPTY_HTML = `<!DOCTYPE html><html><body><p>Nothing here</p></body></html>
 describe('versionHistory', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.resolveAppId).mockReset();
   });
 
   describe('validation', () => {
-    it('throws ValidationError when id is missing', async () => {
-      await expect(versionHistory({ id: undefined as unknown as number })).rejects.toThrow(
-        ValidationError
-      );
-      await expect(versionHistory({ id: undefined as unknown as number })).rejects.toThrow(
-        'id is required'
-      );
-    });
-
-    it('throws ValidationError when id is null', async () => {
-      await expect(versionHistory({ id: null as unknown as number })).rejects.toThrow(
-        ValidationError
-      );
+    it('throws ValidationError when neither id nor appId is provided', async () => {
+      await expect(versionHistory({} as never)).rejects.toThrow(ValidationError);
+      await expect(versionHistory({} as never)).rejects.toThrow('Either id or appId is required');
     });
 
     it('throws ValidationError for invalid country', async () => {
       await expect(versionHistory({ id: 123, country: 'zz' })).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('appId resolution', () => {
+    it('resolves appId to numeric id before fetching', async () => {
+      vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
+      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+      await versionHistory({ appId: 'com.example.app' });
+
+      expect(common.resolveAppId).toHaveBeenCalledWith({
+        appId: 'com.example.app',
+        country: DEFAULT_COUNTRY,
+        requestOptions: undefined,
+      });
+      expect(common.doRequest).toHaveBeenCalledWith(
+        expect.stringContaining('id553834731'),
+        undefined
+      );
+    });
+
+    it('prefers id over appId when both are provided', async () => {
+      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+      await versionHistory({ id: 123, appId: 'com.example.app' });
+
+      expect(common.resolveAppId).not.toHaveBeenCalled();
     });
   });
 

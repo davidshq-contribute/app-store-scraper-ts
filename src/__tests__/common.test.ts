@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   storeId,
   ensureArray,
@@ -20,7 +20,27 @@ function minimalLookupJson(trackId: number): string {
   });
 }
 
+/** Captures the error thrown by a synchronous function. */
+function getError(fn: () => unknown): Error {
+  try {
+    fn();
+  } catch (err) {
+    return err as Error;
+  }
+  throw new Error('Expected function to throw');
+}
+
+/** Helper to stub globalThis.fetch with a vi.fn() mock via vi.stubGlobal (auto-restored). */
+function stubFetch(impl: ReturnType<typeof vi.fn> = vi.fn()): ReturnType<typeof vi.fn> {
+  vi.stubGlobal('fetch', impl);
+  return impl;
+}
+
 describe('common utilities', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   describe('appPageUrl', () => {
     it('builds exact App Store app page URL format', () => {
       expect(appPageUrl('us', 553834731)).toBe(
@@ -60,15 +80,26 @@ describe('common utilities', () => {
       expect(parseJson('[1,2]')).toEqual([1, 2]);
     });
 
-    it('throws clear error on invalid JSON with body preview', () => {
+    it('throws HttpError on invalid JSON with body preview', () => {
       const body = 'not json at all';
+      expect(() => parseJson(body)).toThrow(HttpError);
       expect(() => parseJson(body)).toThrow('Invalid JSON response');
       expect(() => parseJson(body)).toThrow('Body preview:');
       expect(() => parseJson(body)).toThrow(body);
     });
 
-    it('includes optional status in error when provided', () => {
-      expect(() => parseJson('x', { status: 500 })).toThrow('status 500');
+    it('defaults to status 200 when no context provided', () => {
+      const err = getError(() => parseJson('x'));
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).status).toBe(200);
+      expect(err.message).toContain('status 200');
+    });
+
+    it('uses provided status in error when given', () => {
+      const err = getError(() => parseJson('x', { status: 500 }));
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).status).toBe(500);
+      expect(err.message).toContain('status 500');
     });
 
     it('truncates long body in preview to 200 chars', () => {
@@ -84,9 +115,8 @@ describe('common utilities', () => {
       expect(storeId('ca')).toBe(143455);
     });
 
-    it('should return US store ID for unknown country', () => {
-      const id = storeId('xx');
-      expect(id).toBe(143441);
+    it('should throw for unknown country code', () => {
+      expect(() => storeId('xx')).toThrow('Unknown country code: xx');
     });
 
     it('should handle case-insensitive country codes', () => {
@@ -122,28 +152,20 @@ describe('common utilities', () => {
   });
 
   describe('resolveAppId', () => {
-    const originalFetch = globalThis.fetch;
-    beforeEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     it('returns numeric id when lookup finds the app', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(minimalLookupJson(553834731)),
-      }) as typeof fetch;
+      }));
       const id = await resolveAppId({ appId: 'com.example.app' });
       expect(id).toBe(553834731);
     });
 
     it('throws when lookup returns no results', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
-      }) as typeof fetch;
+      }));
       const err = await resolveAppId({ appId: 'com.nonexistent.app' }).catch((e) => e);
       expect(err).toBeInstanceOf(HttpError);
       expect(err.message).toBe('App not found: com.nonexistent.app');
@@ -151,10 +173,10 @@ describe('common utilities', () => {
     });
 
     it('passes country and requestOptions to lookup', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(minimalLookupJson(1)),
-      }) as typeof fetch;
+      }));
       await resolveAppId({ appId: 'com.test', country: 'gb', requestOptions: { timeoutMs: 5000 } });
       expect(fetch).toHaveBeenCalledWith(
         expect.stringMatching(/itunes\.apple\.com\/lookup.*country=gb/),
@@ -164,16 +186,8 @@ describe('common utilities', () => {
   });
 
   describe('lookup', () => {
-    const originalFetch = globalThis.fetch;
-    beforeEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     it('builds lookup URL with bundleId parameter when idField is bundleId', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () =>
           Promise.resolve(
@@ -182,7 +196,7 @@ describe('common utilities', () => {
               results: [{ kind: 'software', trackId: 1, bundleId: 'com.test' }],
             })
           ),
-      }) as typeof fetch;
+      }));
       await lookup('com.test.app', 'bundleId', 'us');
       expect(fetch).toHaveBeenCalledWith(
         expect.stringMatching(/itunes\.apple\.com\/lookup\?.*bundleId=com\.test\.app/),
@@ -191,7 +205,7 @@ describe('common utilities', () => {
     });
 
     it('builds lookup URL with id parameter when idField is id or artistId', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () =>
           Promise.resolve(
@@ -200,7 +214,7 @@ describe('common utilities', () => {
               results: [{ kind: 'software', trackId: 553834731 }],
             })
           ),
-      }) as typeof fetch;
+      }));
       await lookup(553834731, 'id', 'gb');
       expect(fetch).toHaveBeenCalledWith(
         expect.stringMatching(/itunes\.apple\.com\/lookup\?.*id=553834731/),
@@ -215,7 +229,7 @@ describe('common utilities', () => {
     });
 
     it('includes entity=software and country in URL', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () =>
           Promise.resolve(
@@ -224,9 +238,9 @@ describe('common utilities', () => {
               results: [{ kind: 'software', trackId: 1 }],
             })
           ),
-      }) as typeof fetch;
+      }));
       await lookup(1, 'id', 'jp');
-      const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      const url = vi.mocked(fetch).mock.calls[0]![0] as string;
       expect(url).toContain('entity=software');
       expect(url).toContain('country=jp');
     });
@@ -245,10 +259,10 @@ describe('common utilities', () => {
           },
         ],
       });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup('com.test.app', 'bundleId');
       expect(apps).toHaveLength(1);
       expect(apps[0]!.genreIds).toEqual([6014, 6001]); // 0 filtered (Apple genre IDs are 6000+)
@@ -294,10 +308,10 @@ describe('common utilities', () => {
         supportedDevices: ['iPhone', 'iPad'],
       };
       const json = JSON.stringify({ resultCount: 1, results: [fullApp] });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup(553834731, 'id');
       expect(apps).toHaveLength(1);
       const app = apps[0]!;
@@ -349,10 +363,10 @@ describe('common utilities', () => {
           },
         ],
       });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup(1, 'id');
       expect(apps[0]!.icon).toBe('https://example.com/100.png');
     });
@@ -367,10 +381,10 @@ describe('common utilities', () => {
           },
         ],
       });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup(999, 'id');
       expect(apps).toHaveLength(1);
       const app = apps[0]!;
@@ -408,42 +422,44 @@ describe('common utilities', () => {
       expect(app.supportedDevices).toEqual([]);
     });
 
-    it('filters to software kind/wrapperType only (excludes artist records)', async () => {
+    it('filters to app records only (excludes artist records)', async () => {
       const json = JSON.stringify({
-        resultCount: 3,
+        resultCount: 4,
         results: [
           { kind: 'software', trackId: 1, bundleId: 'com.a' },
           { wrapperType: 'artist', artistId: 999, artistName: 'Artist' },
           { wrapperType: 'software', trackId: 2, bundleId: 'com.b' },
+          { kind: 'mac-software', trackId: 3, bundleId: 'com.c' },
         ],
       });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup(1, 'id');
-      expect(apps).toHaveLength(2);
+      expect(apps).toHaveLength(3);
       expect(apps[0]!.id).toBe(1);
       expect(apps[1]!.id).toBe(2);
+      expect(apps[2]!.id).toBe(3);
     });
 
     it('includes lang parameter when provided', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
-      }) as typeof fetch;
+      }));
       await lookup(1, 'id', 'us', 'en');
-      const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      const url = vi.mocked(fetch).mock.calls[0]![0] as string;
       expect(url).toContain('lang=en');
     });
 
     it('does not include lang parameter when not provided', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
-      }) as typeof fetch;
+      }));
       await lookup(1, 'id', 'us');
-      const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
+      const url = vi.mocked(fetch).mock.calls[0]![0] as string;
       expect(url).not.toContain('lang=');
     });
 
@@ -454,10 +470,10 @@ describe('common utilities', () => {
           { kind: 'software', trackId: 1, bundleId: 'com.paid', price: 4.99, currency: 'EUR' },
         ],
       });
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(json),
-      }) as typeof fetch;
+      }));
       const apps = await lookup(1, 'id');
       expect(apps[0]!.free).toBe(false);
       expect(apps[0]!.price).toBe(4.99);
@@ -465,28 +481,20 @@ describe('common utilities', () => {
     });
 
     it('throws ValidationError when iTunes API response fails schema validation', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('{"not": "valid lookup response"}'),
-      }) as typeof fetch;
+      }));
       await expect(lookup(1, 'id')).rejects.toThrow('iTunes API response validation failed');
     });
   });
 
   describe('doRequest', () => {
-    const originalFetch = globalThis.fetch;
-    beforeEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     it('sends User-Agent header by default', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('ok'),
-      }) as typeof fetch;
+      }));
       await doRequest('https://example.com');
       expect(fetch).toHaveBeenCalledWith(
         'https://example.com',
@@ -501,20 +509,20 @@ describe('common utilities', () => {
 
     it('returns response body verbatim on success', async () => {
       const bodyText = '{"resultCount":1,"results":[]}';
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(bodyText),
-      }) as typeof fetch;
+      }));
       const body = await doRequest('https://example.com');
       expect(body).toBe(bodyText);
     });
 
     it('throws immediately for non-retryable status codes (404)', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
         text: () => Promise.resolve('Not Found'),
-      }) as typeof fetch;
+      }));
       const err = await doRequest('https://example.com', { retries: 2 }).catch(
         (e) => e
       );
@@ -524,8 +532,7 @@ describe('common utilities', () => {
     });
 
     it('retries on 503 and eventually succeeds', async () => {
-      globalThis.fetch = vi
-        .fn()
+      stubFetch(vi.fn()
         .mockResolvedValueOnce({
           ok: false,
           status: 503,
@@ -534,15 +541,14 @@ describe('common utilities', () => {
         .mockResolvedValueOnce({
           ok: true,
           text: () => Promise.resolve('success'),
-        }) as typeof fetch;
+        }));
       const body = await doRequest('https://example.com', { retries: 2 });
       expect(body).toBe('success');
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it('retries on 429 (throttle) and eventually succeeds', async () => {
-      globalThis.fetch = vi
-        .fn()
+      stubFetch(vi.fn()
         .mockResolvedValueOnce({
           ok: false,
           status: 429,
@@ -551,29 +557,27 @@ describe('common utilities', () => {
         .mockResolvedValueOnce({
           ok: true,
           text: () => Promise.resolve('ok'),
-        }) as typeof fetch;
+        }));
       const body = await doRequest('https://example.com', { retries: 2 });
       expect(body).toBe('ok');
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it('retries on TypeError (network error) and eventually succeeds', async () => {
-      globalThis.fetch = vi
-        .fn()
+      stubFetch(vi.fn()
         .mockRejectedValueOnce(new TypeError('fetch failed'))
         .mockResolvedValueOnce({
           ok: true,
           text: () => Promise.resolve('recovered'),
-        }) as typeof fetch;
+        }));
       const body = await doRequest('https://example.com', { retries: 1 });
       expect(body).toBe('recovered');
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
     it('throws TypeError when retries exhausted on network error', async () => {
-      globalThis.fetch = vi
-        .fn()
-        .mockRejectedValue(new TypeError('fetch failed')) as typeof fetch;
+      stubFetch(vi.fn()
+        .mockRejectedValue(new TypeError('fetch failed')));
       const err = await doRequest('https://example.com', { retries: 1 }).catch((e) => e);
       expect(err).toBeInstanceOf(TypeError);
       expect(err.message).toBe('fetch failed');
@@ -582,29 +586,21 @@ describe('common utilities', () => {
   });
 
   describe('doRequest retries clamp', () => {
-    const originalFetch = globalThis.fetch;
-    beforeEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     it('clamps retries: -1 to 0 and makes one request', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('ok'),
-      }) as typeof fetch;
+      }));
       const body = await doRequest('https://example.com', { retries: -1 });
       expect(body).toBe('ok');
       expect(fetch).toHaveBeenCalledTimes(1);
     });
 
     it('clamps retries: NaN to 0 and makes one request', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('ok'),
-      }) as typeof fetch;
+      }));
       const body = await doRequest('https://example.com', {
         retries: Number.NaN,
       });
@@ -614,11 +610,6 @@ describe('common utilities', () => {
   });
 
   describe('doRequest timeoutMs validation', () => {
-    const originalFetch = globalThis.fetch;
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     it('throws clear error for timeoutMs <= 0', async () => {
       await expect(doRequest('https://example.com', { timeoutMs: 0 })).rejects.toThrow(
         'Invalid timeoutMs: must be a positive number, got 0'
@@ -638,10 +629,10 @@ describe('common utilities', () => {
     });
 
     it('accepts valid positive timeoutMs and makes request', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      stubFetch(vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve('ok'),
-      }) as typeof fetch;
+      }));
       const body = await doRequest('https://example.com', { timeoutMs: 5000 });
       expect(body).toBe('ok');
       expect(fetch).toHaveBeenCalledTimes(1);

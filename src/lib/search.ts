@@ -1,7 +1,7 @@
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY, device as deviceConstants, ITUNES_API_MAX_LIMIT } from '../types/constants.js';
-import { doRequest, cleanApp, parseJson } from './common.js';
+import { doRequest, cleanApp, parseJson, isAppRecord } from './common.js';
 import { ValidationError } from './errors.js';
 import { validateCountry, validateSearchPagination, validateDevice } from './validate.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
@@ -97,10 +97,8 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const response = validationResult.data;
 
   // iTunes Search API has no offset; we requested limit (capped at 200) and slice here.
-  // Filter to software only; align with lookup() so we keep items with kind or wrapperType === 'software'.
-  const allResults = response.results.filter(
-    (app) => app.kind === 'software' || app.wrapperType === 'software'
-  );
+  // Filter to app records only (excludes artist entries, audiobooks, etc.)
+  const allResults = response.results.filter((app) => isAppRecord(app));
 
   // Apply pagination
   const start = (page - 1) * num;

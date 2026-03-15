@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as common from '../lib/common.js';
-import { HttpError, ValidationError } from '../lib/errors.js';
+import { HttpError, RatingsEmptyError, ValidationError } from '../lib/errors.js';
 import { ratings, parseRatings } from '../lib/ratings.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 
@@ -241,7 +241,7 @@ describe('ratings()', () => {
     );
   });
 
-  it('throws HttpError with status 200 and RATINGS_EMPTY_MESSAGE when response body is empty', async () => {
+  it('throws RatingsEmptyError (instanceof HttpError) when response body is empty', async () => {
     vi.mocked(common.doRequest).mockResolvedValue('');
     const url = `https://itunes.apple.com/${DEFAULT_COUNTRY}/customer-reviews/id123?displayable-kind=11`;
 
@@ -249,6 +249,7 @@ describe('ratings()', () => {
       () => expect.fail('expected rejection'),
       (e: unknown) => e
     );
+    expect(err).toBeInstanceOf(RatingsEmptyError);
     expect(err).toBeInstanceOf(HttpError);
     expect(err).toMatchObject({
       message: 'No ratings data returned',

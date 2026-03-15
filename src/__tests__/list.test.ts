@@ -477,7 +477,8 @@ describe('list', () => {
       );
     });
 
-    it('fullDetail=true returns empty when all entry IDs are invalid', async () => {
+    it('fullDetail=true returns empty and warns when all entry IDs are invalid', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const rssData = {
         feed: {
           entry: [
@@ -508,6 +509,45 @@ describe('list', () => {
       // Only RSS feed request, no lookup since no valid IDs
       expect(common.doRequest).toHaveBeenCalledTimes(1);
       expect(common.lookup).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith('list(): skipped 1 feed entries with missing or invalid id');
+      warnSpy.mockRestore();
+    });
+
+    it('warns when entries are skipped in light mode (fullDetail=false)', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const rssData = {
+        feed: {
+          entry: [
+            {
+              id: { attributes: { 'im:id': '1', 'im:bundleId': 'com.valid' } },
+              'im:name': { label: 'Valid' },
+              'im:image': [{ label: 'https://example.com/icon.png' }],
+              link: [{ attributes: { href: 'https://apps.apple.com/us/app/x/id1', rel: 'alternate' } }],
+              'im:price': { attributes: { amount: '0', currency: 'USD' } },
+              summary: { label: 'Desc' },
+              'im:artist': { label: 'Dev', attributes: { href: 'https://apps.apple.com/us/developer/x/id1' } },
+              category: { attributes: { label: 'Games', 'im:id': '6014' } },
+              'im:releaseDate': { label: '2024-01-01T00:00:00Z' },
+            },
+            {
+              id: { attributes: { 'im:bundleId': 'com.noid' } },
+              'im:name': { label: 'Missing ID' },
+            },
+          ],
+        },
+      };
+      vi.mocked(common.doRequest).mockResolvedValueOnce(JSON.stringify(rssData));
+
+      const results = await list({
+        collection: collection.TOP_FREE_IOS,
+        num: 10,
+        country: DEFAULT_COUNTRY,
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe(1);
+      expect(warnSpy).toHaveBeenCalledWith('list(): skipped 1 feed entries with missing or invalid id');
+      warnSpy.mockRestore();
     });
 
     it('list entry with missing optional fields falls back to empty strings', async () => {

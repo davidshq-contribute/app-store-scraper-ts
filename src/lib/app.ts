@@ -4,8 +4,8 @@ import type { AppOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { appPageUrl, doRequest, lookup, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError } from './errors.js';
-import { ratings, RATINGS_EMPTY_MESSAGE } from './ratings.js';
+import { HttpError, RatingsEmptyError } from './errors.js';
+import { ratings } from './ratings.js';
 
 /**
  * Extracts a clean screenshot URL from srcset attribute.
@@ -200,15 +200,10 @@ export async function app(options: AppOptions): Promise<App> {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
       result = { ...result, histogram: ratingsData.histogram };
     } catch (error) {
-      // 404 = ratings endpoint not found; 200 + RATINGS_EMPTY_MESSAGE = empty body.
-      // Only these cases are swallowed; other errors (500, network, etc.) propagate.
-      if (
-        !(
-          error instanceof HttpError &&
-          (error.status === 404 ||
-            (error.status === 200 && error.message === RATINGS_EMPTY_MESSAGE))
-        )
-      ) {
+      // Swallow "no ratings available" cases; propagate everything else.
+      const isNotFound = error instanceof HttpError && error.status === 404;
+      const isEmpty = error instanceof RatingsEmptyError;
+      if (!isNotFound && !isEmpty) {
         throw error;
       }
     }

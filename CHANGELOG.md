@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **`RATINGS_EMPTY_MESSAGE` removed:** The exported `RATINGS_EMPTY_MESSAGE` constant and the `error.message === RATINGS_EMPTY_MESSAGE` matching pattern have been replaced by a dedicated `RatingsEmptyError` class (extends `HttpError`). Consumers should migrate from `error.message === RATINGS_EMPTY_MESSAGE` to `error instanceof RatingsEmptyError`. The new class is exported from the package root.
+- **`PrivacyDetails` interface:** Removed `managePrivacyChoicesUrl` and `privacyPolicyText` fields — these were never populated by any parser and always returned `undefined`.
+
 ### Changed
 
 - **validateRequiredField (CODE_SMELLS §2):** `validateRequiredField` in `src/lib/common.ts` now accepts a generic `<T extends object>` so callers can pass typed options without casting. Removed `options as Record<string, unknown>` from `app.ts`, `reviews.ts`, and `similar.ts`. List/suggest (CODE_SMELLS §1) already throw `ValidationError` with `field: 'response'` for API response validation.

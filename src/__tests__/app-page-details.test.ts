@@ -22,6 +22,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     doRequest: vi.fn(),
+    resolveAppId: vi.fn(),
   };
 });
 
@@ -76,18 +77,37 @@ const EMPTY_HTML = `
 describe('appPageDetails', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.resolveAppId).mockReset();
   });
 
-  it('throws ValidationError when id is missing', async () => {
-    await expect(appPageDetails({ id: undefined as unknown as number })).rejects.toThrow(
-      ValidationError
+  it('throws ValidationError when neither id nor appId is provided', async () => {
+    await expect(appPageDetails({} as never)).rejects.toThrow(ValidationError);
+    await expect(appPageDetails({} as never)).rejects.toThrow('Either id or appId is required');
+  });
+
+  it('resolves appId to numeric id before fetching', async () => {
+    vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
+    vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+    await appPageDetails({ appId: 'com.example.app' });
+
+    expect(common.resolveAppId).toHaveBeenCalledWith({
+      appId: 'com.example.app',
+      country: DEFAULT_COUNTRY,
+      requestOptions: undefined,
+    });
+    expect(common.doRequest).toHaveBeenCalledWith(
+      expect.stringContaining('id553834731'),
+      undefined
     );
   });
 
-  it('throws ValidationError when id is null', async () => {
-    await expect(appPageDetails({ id: null as unknown as number })).rejects.toThrow(
-      ValidationError
-    );
+  it('prefers id over appId when both are provided', async () => {
+    vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+
+    await appPageDetails({ id: 123, appId: 'com.example.app' });
+
+    expect(common.resolveAppId).not.toHaveBeenCalled();
   });
 
   it('returns empty result on 404', async () => {
@@ -159,6 +179,30 @@ describe('appPageDetails', () => {
 
       const ids = result.similarIds.map((e) => e.id);
       expect(ids).not.toContain(111);
+    });
+
+    it('deduplicates similar app entries with same id and linkType', async () => {
+      const htmlWithDupes = `
+<!DOCTYPE html>
+<html><body>
+  <h2>Customers Also Bought</h2>
+  <a href="/us/app/foo/id111">App 1 heading link</a>
+  <a href="/us/app/foo/id111">App 1 card link</a>
+  <a href="/us/app/bar/id222">App 2</a>
+  <h3>More from this developer</h3>
+  <a href="/us/app/foo/id111">App 1 again in different section</a>
+</body></html>`;
+      vi.mocked(common.doRequest).mockResolvedValueOnce(htmlWithDupes);
+
+      const result = await appPageDetails({ id: 999 });
+
+      // id 111 appears twice under "customers-also-bought" but should be deduplicated to one
+      // id 111 under "more-by-developer" is a different (id, linkType) pair, so it's kept
+      expect(result.similarIds).toEqual([
+        { id: 111, linkType: 'customers-also-bought' },
+        { id: 222, linkType: 'customers-also-bought' },
+        { id: 111, linkType: 'more-by-developer' },
+      ]);
     });
 
     it('parses version history from fixture', async () => {
