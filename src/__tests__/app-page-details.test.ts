@@ -21,7 +21,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
   return {
     ...actual,
-    doRequest: vi.fn(),
+    fetchAppPage: vi.fn(),
     resolveAppId: vi.fn(),
   };
 });
@@ -76,7 +76,7 @@ const EMPTY_HTML = `
 
 describe('appPageDetails', () => {
   beforeEach(() => {
-    vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.fetchAppPage).mockReset();
     vi.mocked(common.resolveAppId).mockReset();
   });
 
@@ -87,7 +87,7 @@ describe('appPageDetails', () => {
 
   it('resolves appId to numeric id before fetching', async () => {
     vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
-    vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+    vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
     await appPageDetails({ appId: 'com.example.app' });
 
@@ -96,14 +96,14 @@ describe('appPageDetails', () => {
       country: DEFAULT_COUNTRY,
       requestOptions: undefined,
     });
-    expect(common.doRequest).toHaveBeenCalledWith(
+    expect(common.fetchAppPage).toHaveBeenCalledWith(
       expect.stringContaining('id553834731'),
       undefined
     );
   });
 
   it('prefers id over appId when both are provided', async () => {
-    vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+    vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
     await appPageDetails({ id: 123, appId: 'com.example.app' });
 
@@ -111,7 +111,7 @@ describe('appPageDetails', () => {
   });
 
   it('returns empty result on 404', async () => {
-    vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Not Found', 404));
+    vi.mocked(common.fetchAppPage).mockResolvedValueOnce(null);
 
     const result = await appPageDetails({ id: 999 });
 
@@ -123,7 +123,7 @@ describe('appPageDetails', () => {
   });
 
   it('throws on non-404 fetch errors', async () => {
-    vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Server Error', 500));
+    vi.mocked(common.fetchAppPage).mockRejectedValueOnce(new HttpError('Server Error', 500));
 
     await expect(appPageDetails({ id: 999 })).rejects.toThrow(HttpError);
   });
@@ -131,7 +131,7 @@ describe('appPageDetails', () => {
   describe('fixture-based: combined parse matches individual parsers', () => {
     it('combined result matches parsePrivacyFromHtml, parseSimilarIdsFromHtml, parseVersionHistoryFromHtml on same HTML', async () => {
       const appId = 999;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(COMBINED_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(COMBINED_HTML);
 
       const result = await appPageDetails({ id: appId, country: DEFAULT_COUNTRY });
 
@@ -146,7 +146,7 @@ describe('appPageDetails', () => {
     });
 
     it('parses privacy policy URL and privacy types from fixture', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(COMBINED_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(COMBINED_HTML);
 
       const result = await appPageDetails({ id: 999 });
 
@@ -162,7 +162,7 @@ describe('appPageDetails', () => {
     });
 
     it('parses similar app IDs with link types from fixture', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(COMBINED_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(COMBINED_HTML);
 
       const result = await appPageDetails({ id: 999 });
 
@@ -173,7 +173,7 @@ describe('appPageDetails', () => {
     });
 
     it('excludes current app ID from similarIds', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(COMBINED_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(COMBINED_HTML);
 
       const result = await appPageDetails({ id: 111 });
 
@@ -192,7 +192,7 @@ describe('appPageDetails', () => {
   <h3>More from this developer</h3>
   <a href="/us/app/foo/id111">App 1 again in different section</a>
 </body></html>`;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(htmlWithDupes);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(htmlWithDupes);
 
       const result = await appPageDetails({ id: 999 });
 
@@ -206,7 +206,7 @@ describe('appPageDetails', () => {
     });
 
     it('parses version history from fixture', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(COMBINED_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(COMBINED_HTML);
 
       const result = await appPageDetails({ id: 999 });
 
@@ -224,7 +224,7 @@ describe('appPageDetails', () => {
     });
 
     it('returns empty privacy, similarIds, versionHistory for HTML with no relevant content', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(EMPTY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(EMPTY_HTML);
 
       const result = await appPageDetails({ id: 999 });
 

@@ -31,7 +31,9 @@ describe('reviews', () => {
   });
 
   it('throws ValidationError with field for invalid sort', async () => {
-    const err = await reviews({ id: 123, sort: 'invalid' } as unknown as Parameters<typeof reviews>[0]).catch((e) => e);
+    const err = await reviews({ id: 123, sort: 'invalid' } as unknown as Parameters<
+      typeof reviews
+    >[0]).catch((e) => e);
     expect(err).toBeInstanceOf(ValidationError);
     expect(err.field).toBe('sort');
   });
@@ -94,7 +96,9 @@ describe('reviews', () => {
       vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(minimalFeed));
       await reviews({ id: 553834731, page: 2, country: 'gb' });
       expect(common.doRequest).toHaveBeenCalledWith(
-        expect.stringMatching(/\/gb\/rss\/customerreviews\/page=2\/id=553834731\/sortby=mostRecent\/json/),
+        expect.stringMatching(
+          /\/gb\/rss\/customerreviews\/page=2\/id=553834731\/sortby=mostRecent\/json/
+        ),
         undefined
       );
     });
@@ -159,7 +163,9 @@ describe('reviews', () => {
     const originalError = new Error('Network timeout');
     vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
 
-    const err = await reviews({ appId: 'com.test', page: 1 } as Parameters<typeof reviews>[0]).catch((e) => e);
+    const err = await reviews({ appId: 'com.test', page: 1 } as Parameters<
+      typeof reviews
+    >[0]).catch((e) => e);
     expect(err).not.toBeInstanceOf(HttpError);
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toBe('Could not resolve app id "com.test": Network timeout');

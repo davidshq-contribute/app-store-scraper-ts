@@ -3,9 +3,16 @@ import type { App } from '../types/app.js';
 import type { SimilarApp } from '../types/app.js';
 import type { SimilarOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { appPageUrl, doRequest, validateRequiredField, lookup, resolveAppId } from './common.js';
+import {
+  appPageUrl,
+  fetchAppPage,
+  validateRequiredField,
+  lookup,
+  resolveAppId,
+  wrapResolveAppIdError,
+} from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError, ValidationError } from './errors.js';
+import { ValidationError } from './errors.js';
 import { parseSimilarIdsFromHtml, getLinkTypeFromHeadingText } from './parsers.js';
 
 export { getLinkTypeFromHeadingText };
@@ -55,11 +62,7 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
-      if (err instanceof HttpError) {
-        throw new HttpError(message, err.status, err.url);
-      }
-      throw new Error(message, { cause: err });
+      wrapResolveAppIdError(appId, err);
     }
   }
 
@@ -71,17 +74,8 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
 
   // Build URL for main app page (contains similar apps embedded in HTML)
   const url = appPageUrl(country, id);
-
-  let body: string;
-  try {
-    body = await doRequest(url, requestOptions);
-  } catch (error) {
-    // 404 means the app page does not exist; treat as "no similar apps"
-    if (error instanceof HttpError && error.status === 404) {
-      return [];
-    }
-    throw error;
-  }
+  const body = await fetchAppPage(url, requestOptions);
+  if (body === null) return [];
 
   const $ = cheerio.load(body);
   const entries = parseSimilarIdsFromHtml($, id);

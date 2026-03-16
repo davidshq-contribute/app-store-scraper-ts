@@ -176,9 +176,7 @@ describe('search', () => {
     // Missing required resultCount (number) — triggers schema failure
     vi.mocked(common.doRequest).mockResolvedValueOnce('{"bad": true}');
 
-    await expect(search({ term: 'test' })).rejects.toThrow(
-      'Search API response validation failed'
-    );
+    await expect(search({ term: 'test' })).rejects.toThrow('Search API response validation failed');
   });
 
   it('includes media=software in URL', async () => {

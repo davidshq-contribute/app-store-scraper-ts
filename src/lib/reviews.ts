@@ -5,10 +5,11 @@ import {
   doRequest,
   validateRequiredField,
   ensureArray,
-  parseJson,
+  parseAndValidate,
   resolveAppId,
+  wrapResolveAppIdError,
 } from './common.js';
-import { HttpError, ValidationError } from './errors.js';
+import { ValidationError } from './errors.js';
 import { validateCountry, validateSort, validateReviewsPage } from './validate.js';
 import { reviewsFeedSchema } from './schemas.js';
 
@@ -59,11 +60,7 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
-      if (err instanceof HttpError) {
-        throw new HttpError(message, err.status, err.url);
-      }
-      throw new Error(message, { cause: err });
+      wrapResolveAppIdError(appId, err);
     }
   }
 
@@ -77,18 +74,7 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
 
   const body = await doRequest(url, requestOptions);
 
-  // Parse and validate response with Zod
-  const parsedData = parseJson(body);
-  const validationResult = reviewsFeedSchema.safeParse(parsedData);
-
-  if (!validationResult.success) {
-    throw new ValidationError(
-      `Reviews API response validation failed: ${validationResult.error.message}`,
-      'response'
-    );
-  }
-
-  const data = validationResult.data;
+  const data = parseAndValidate(body, reviewsFeedSchema, 'Reviews API response');
 
   // Extract entries (can be single object or array)
   const entries = ensureArray(data.feed?.entry);

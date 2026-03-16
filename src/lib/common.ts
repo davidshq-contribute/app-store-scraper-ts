@@ -1,9 +1,5 @@
 import type { App } from '../types/app.js';
-import {
-  BODY_PREVIEW_MAX_LEN,
-  DEFAULT_COUNTRY,
-  markets,
-} from '../types/constants.js';
+import { BODY_PREVIEW_MAX_LEN, DEFAULT_COUNTRY, markets } from '../types/constants.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
 import { HttpError, ValidationError } from './errors.js';
@@ -35,6 +31,22 @@ export function isAppRecord(record: { kind?: string; wrapperType?: string }): bo
  */
 export function appPageUrl(country: string, appId: number): string {
   return `https://apps.apple.com/${country}/app/id${appId}`;
+}
+
+/**
+ * Fetches the app page HTML; on 404 returns null so callers can return their empty value.
+ * @internal
+ */
+export async function fetchAppPage(
+  url: string,
+  requestOptions?: RequestOptions
+): Promise<string | null> {
+  try {
+    return await doRequest(url, requestOptions);
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 /** Returns true if the failure is transient and worth retrying (GET is idempotent). */
@@ -139,7 +151,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
       lastError = err instanceof Error ? err : new Error(String(err));
       const status = hasStatus(err) ? err.status : undefined;
       if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
-        const delayMs = 1000 * 2 ** attempt;
+        const delayMs = backoffMs(attempt);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
@@ -176,6 +188,40 @@ export function parseJson(body: string, context?: { status?: number }): unknown 
       status
     );
   }
+}
+
+/**
+ * Schema type for parseAndValidate: must have safeParse returning success/data or error.
+ * @internal
+ */
+type ParseableSchema<T> = {
+  safeParse: (
+    u: unknown
+  ) => { success: true; data: T } | { success: false; error: { message: string } };
+};
+
+/**
+ * Parses JSON, validates with a Zod schema, and throws ValidationError on failure.
+ * Centralizes the parseJson + safeParse + ValidationError pattern used by lookup, reviews, list, and search.
+ *
+ * @param body - Raw response body string
+ * @param schema - Zod schema (or any object with safeParse) to validate parsed data
+ * @param context - Context string for error messages (default: 'API response')
+ * @returns Validated data of type T
+ * @throws {ValidationError} when schema validation fails (field: 'response')
+ * @internal
+ */
+export function parseAndValidate<T>(
+  body: string,
+  schema: ParseableSchema<T>,
+  context = 'API response'
+): T {
+  const parsed = parseJson(body);
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new ValidationError(`${context} validation failed: ${result.error.message}`, 'response');
+  }
+  return result.data;
 }
 
 /**
@@ -275,22 +321,10 @@ export async function lookup(
   const url = `https://itunes.apple.com/lookup?${params.toString()}`;
   const body = await doRequest(url, requestOptions);
 
-  const parsedData = parseJson(body);
-  const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
-
-  if (!validationResult.success) {
-    throw new ValidationError(
-      `iTunes API response validation failed: ${validationResult.error.message}`,
-      'response'
-    );
-  }
-
-  const response = validationResult.data;
+  const response = parseAndValidate(body, iTunesLookupResponseSchema, 'iTunes API response');
 
   // Filter to app records only (excludes artist entries, audiobooks, etc.)
-  return response.results
-    .filter((app) => isAppRecord(app))
-    .map((app) => cleanApp(app));
+  return response.results.filter((app) => isAppRecord(app)).map((app) => cleanApp(app));
 }
 
 /**
@@ -310,6 +344,19 @@ export async function resolveAppId(options: ResolveAppIdOptions): Promise<number
     throw new HttpError(`App not found: ${appId}`, 404);
   }
   return apps[0]!.id;
+}
+
+/**
+ * Wraps an error from resolveAppId into a consistent message and rethrows.
+ * Preserves HttpError status/url when the original error is HttpError.
+ * @internal
+ */
+export function wrapResolveAppIdError(appId: string, err: unknown): never {
+  const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
+  if (err instanceof HttpError) {
+    throw new HttpError(message, err.status, err.url);
+  }
+  throw new Error(message, { cause: err });
 }
 
 /**

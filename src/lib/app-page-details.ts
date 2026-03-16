@@ -11,9 +11,15 @@ import * as cheerio from 'cheerio';
 import type { PrivacyDetails, VersionHistory } from '../types/app-details.js';
 import type { RequestOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { appPageUrl, doRequest, validateRequiredField, resolveAppId } from './common.js';
+import {
+  appPageUrl,
+  fetchAppPage,
+  validateRequiredField,
+  resolveAppId,
+  wrapResolveAppIdError,
+} from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError, ValidationError } from './errors.js';
+import { ValidationError } from './errors.js';
 import {
   parsePrivacyFromHtml,
   parseSimilarIdsFromHtml,
@@ -76,11 +82,7 @@ export async function appPageDetails(
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
-      if (err instanceof HttpError) {
-        throw new HttpError(message, err.status, err.url);
-      }
-      throw new Error(message, { cause: err });
+      wrapResolveAppIdError(appId, err);
     }
   }
 
@@ -89,18 +91,9 @@ export async function appPageDetails(
   }
 
   const url = appPageUrl(country, id);
-  let body: string;
-  try {
-    body = await doRequest(url, requestOptions);
-  } catch (error) {
-    if (error instanceof HttpError && error.status === 404) {
-      return {
-        privacy: {},
-        similarIds: [],
-        versionHistory: [],
-      };
-    }
-    throw error;
+  const body = await fetchAppPage(url, requestOptions);
+  if (body === null) {
+    return { privacy: {}, similarIds: [], versionHistory: [] };
   }
 
   const $ = cheerio.load(body);

@@ -101,7 +101,8 @@ export function parseRatings(html: string): Ratings {
 
   // Check if label-based extraction found all 5 unique star ratings
   const labeledStars = new Set(labeledEntries.map((e) => e.star));
-  const hasAllLabels = validStars.size === labeledStars.size && [...validStars].every((s) => labeledStars.has(s));
+  const hasAllLabels =
+    validStars.size === labeledStars.size && [...validStars].every((s) => labeledStars.has(s));
 
   if (hasAllLabels) {
     // Use label-based mapping (order-independent)

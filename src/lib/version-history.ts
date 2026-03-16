@@ -2,9 +2,15 @@ import * as cheerio from 'cheerio';
 import type { VersionHistory } from '../types/app-details.js';
 import type { VersionHistoryOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { appPageUrl, doRequest, validateRequiredField, resolveAppId } from './common.js';
+import {
+  appPageUrl,
+  fetchAppPage,
+  validateRequiredField,
+  resolveAppId,
+  wrapResolveAppIdError,
+} from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError, ValidationError } from './errors.js';
+import { ValidationError } from './errors.js';
 import { parseVersionHistoryFromHtml } from './parsers.js';
 
 /**
@@ -35,11 +41,7 @@ export async function versionHistory(options: VersionHistoryOptions): Promise<Ve
     try {
       id = await resolveAppId({ appId, country, requestOptions });
     } catch (err) {
-      const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
-      if (err instanceof HttpError) {
-        throw new HttpError(message, err.status, err.url);
-      }
-      throw new Error(message, { cause: err });
+      wrapResolveAppIdError(appId, err);
     }
   }
 
@@ -48,16 +50,8 @@ export async function versionHistory(options: VersionHistoryOptions): Promise<Ve
   }
 
   const url = appPageUrl(country, id);
-  let appPageBody: string;
-  try {
-    appPageBody = await doRequest(url, requestOptions);
-  } catch (error) {
-    // 404 = app page not found; return empty array (consistent with similar(), app() screenshots/ratings).
-    if (error instanceof HttpError && error.status === 404) {
-      return [];
-    }
-    throw error;
-  }
+  const appPageBody = await fetchAppPage(url, requestOptions);
+  if (appPageBody === null) return [];
 
   const $ = cheerio.load(appPageBody);
   return parseVersionHistoryFromHtml($);

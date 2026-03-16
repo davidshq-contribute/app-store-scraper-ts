@@ -24,14 +24,15 @@ describe('developer', () => {
   it('calls lookup with artistId field', async () => {
     const lookupResponse = {
       resultCount: 1,
-      results: [
-        { kind: 'software', trackId: 100, bundleId: 'com.test', artistId: 12345 },
-      ],
+      results: [{ kind: 'software', trackId: 100, bundleId: 'com.test', artistId: 12345 }],
     };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      text: () => Promise.resolve(JSON.stringify(lookupResponse)),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(lookupResponse)),
+      })
+    );
 
     await developer({ devId: 12345 });
     // artistId should map to 'id' param in URL (not 'artistId')

@@ -5,8 +5,7 @@ import {
   DEFAULT_COUNTRY,
   ITUNES_API_MAX_LIMIT,
 } from '../types/constants.js';
-import { doRequest, lookup, ensureArray, parseJson } from './common.js';
-import { ValidationError } from './errors.js';
+import { doRequest, lookup, ensureArray, parseAndValidate } from './common.js';
 import {
   validateCountry,
   validateCollection,
@@ -139,14 +138,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   url += `/limit=${limit}/json`;
 
   const body = await doRequest(url, requestOptions);
-  const parsedData = parseJson(body);
-  const validationResult = rssFeedSchema.safeParse(parsedData);
-
-  if (!validationResult.success) {
-    throw new ValidationError(`List API response validation failed: ${validationResult.error.message}`, 'response');
-  }
-
-  const data = validationResult.data;
+  const data = parseAndValidate(body, rssFeedSchema, 'List API response');
   const entries = ensureArray(data.feed?.entry);
 
   if (entries.length === 0) {
@@ -174,9 +166,15 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   let skipped = 0;
   for (const entry of entries) {
     const idStr = entry.id?.attributes?.['im:id'];
-    if (!idStr) { skipped++; continue; }
+    if (!idStr) {
+      skipped++;
+      continue;
+    }
     const n = parseInt(idStr, 10);
-    if (Number.isNaN(n)) { skipped++; continue; }
+    if (Number.isNaN(n)) {
+      skipped++;
+      continue;
+    }
     ids.push(n);
   }
   if (skipped > 0) {

@@ -14,7 +14,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
   return {
     ...actual,
-    doRequest: vi.fn(),
+    fetchAppPage: vi.fn(),
     resolveAppId: vi.fn(),
   };
 });
@@ -61,7 +61,7 @@ const EMPTY_HTML = `<!DOCTYPE html><html><body><p>Nothing here</p></body></html>
 
 describe('versionHistory', () => {
   beforeEach(() => {
-    vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.fetchAppPage).mockReset();
     vi.mocked(common.resolveAppId).mockReset();
   });
 
@@ -79,7 +79,7 @@ describe('versionHistory', () => {
   describe('appId resolution', () => {
     it('resolves appId to numeric id before fetching', async () => {
       vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
-      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
       await versionHistory({ appId: 'com.example.app' });
 
@@ -88,14 +88,14 @@ describe('versionHistory', () => {
         country: DEFAULT_COUNTRY,
         requestOptions: undefined,
       });
-      expect(common.doRequest).toHaveBeenCalledWith(
+      expect(common.fetchAppPage).toHaveBeenCalledWith(
         expect.stringContaining('id553834731'),
         undefined
       );
     });
 
     it('prefers id over appId when both are provided', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
       await versionHistory({ id: 123, appId: 'com.example.app' });
 
@@ -105,16 +105,14 @@ describe('versionHistory', () => {
 
   describe('HTTP error handling', () => {
     it('returns empty array on 404', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(
-        new HttpError('Not Found', 404, 'https://apps.apple.com/us/app/id999')
-      );
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(null);
 
       const result = await versionHistory({ id: 999 });
       expect(result).toEqual([]);
     });
 
     it('throws on non-404 HTTP errors', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(
+      vi.mocked(common.fetchAppPage).mockRejectedValueOnce(
         new HttpError('Server Error', 500, 'https://apps.apple.com/us/app/id999')
       );
 
@@ -122,7 +120,7 @@ describe('versionHistory', () => {
     });
 
     it('throws on network errors', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(new TypeError('fetch failed'));
+      vi.mocked(common.fetchAppPage).mockRejectedValueOnce(new TypeError('fetch failed'));
 
       await expect(versionHistory({ id: 999 })).rejects.toThrow(TypeError);
     });
@@ -130,7 +128,7 @@ describe('versionHistory', () => {
 
   describe('fixture-based parsing', () => {
     it('parses version entries with dates and release notes', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(VERSION_HISTORY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(VERSION_HISTORY_HTML);
 
       const result = await versionHistory({ id: 123, country: DEFAULT_COUNTRY });
 
@@ -148,7 +146,7 @@ describe('versionHistory', () => {
     });
 
     it('returns undefined releaseNotes when notes are empty', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(VERSION_HISTORY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(VERSION_HISTORY_HTML);
 
       const result = await versionHistory({ id: 123, country: DEFAULT_COUNTRY });
 
@@ -160,25 +158,25 @@ describe('versionHistory', () => {
     });
 
     it('excludes articles without time[datetime] element', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(NO_TIME_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(NO_TIME_HTML);
 
       const result = await versionHistory({ id: 123, country: DEFAULT_COUNTRY });
       expect(result).toEqual([]);
     });
 
     it('returns empty array for HTML with no dialog', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(EMPTY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(EMPTY_HTML);
 
       const result = await versionHistory({ id: 123, country: DEFAULT_COUNTRY });
       expect(result).toEqual([]);
     });
 
     it('passes country to appPageUrl', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(EMPTY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(EMPTY_HTML);
 
       await versionHistory({ id: 456, country: 'jp' });
 
-      const calledUrl = vi.mocked(common.doRequest).mock.calls[0]![0];
+      const calledUrl = vi.mocked(common.fetchAppPage).mock.calls[0]![0];
       expect(calledUrl).toContain('/jp/app/id456');
     });
   });

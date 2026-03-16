@@ -1,7 +1,11 @@
 import type { App } from '../types/app.js';
 import type { SearchOptions } from '../types/options.js';
-import { DEFAULT_COUNTRY, device as deviceConstants, ITUNES_API_MAX_LIMIT } from '../types/constants.js';
-import { doRequest, cleanApp, parseJson, isAppRecord } from './common.js';
+import {
+  DEFAULT_COUNTRY,
+  device as deviceConstants,
+  ITUNES_API_MAX_LIMIT,
+} from '../types/constants.js';
+import { doRequest, cleanApp, parseAndValidate, isAppRecord } from './common.js';
 import { ValidationError } from './errors.js';
 import { validateCountry, validateSearchPagination, validateDevice } from './validate.js';
 import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
@@ -83,18 +87,7 @@ export async function search(options: SearchOptions): Promise<App[] | number[]> 
   const url = `https://itunes.apple.com/search?${params.toString()}`;
   const body = await doRequest(url, requestOptions);
 
-  // Parse and validate response with Zod
-  const parsedData = parseJson(body);
-  const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
-
-  if (!validationResult.success) {
-    throw new ValidationError(
-      `Search API response validation failed: ${validationResult.error.message}`,
-      'response'
-    );
-  }
-
-  const response = validationResult.data;
+  const response = parseAndValidate(body, iTunesLookupResponseSchema, 'Search API response');
 
   // iTunes Search API has no offset; we requested limit (capped at 200) and slice here.
   // Filter to app records only (excludes artist entries, audiobooks, etc.)

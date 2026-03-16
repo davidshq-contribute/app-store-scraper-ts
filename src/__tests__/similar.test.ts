@@ -10,7 +10,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
   return {
     ...actual,
-    doRequest: vi.fn(),
+    fetchAppPage: vi.fn(),
     lookup: vi.fn(),
     resolveAppId: vi.fn(),
   };
@@ -92,7 +92,7 @@ describe('similar', () => {
 
   describe('fixture-based (no network)', () => {
     beforeEach(() => {
-      vi.mocked(common.doRequest).mockReset();
+      vi.mocked(common.fetchAppPage).mockReset();
       vi.mocked(common.lookup).mockReset();
       vi.mocked(common.resolveAppId).mockReset();
     });
@@ -108,7 +108,7 @@ describe('similar', () => {
           <a href="/us/app/baz/id333">App 3</a>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       vi.mocked(common.lookup).mockResolvedValueOnce([
         minimalApp(111, 'App 1'),
         minimalApp(222, 'App 2'),
@@ -133,17 +133,17 @@ describe('similar', () => {
       expect(results[2]).toEqual({ app: minimalApp(333, 'App 3'), linkType: 'more-by-developer' });
     });
 
-    it('returns [] when doRequest throws HttpError 404 (app page not found)', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(new HttpError('Not found', 404));
+    it('returns [] when fetchAppPage returns null (app page not found)', async () => {
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(null);
 
       const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
 
       expect(results).toEqual([]);
     });
 
-    it('rethrows when doRequest throws HttpError 500', async () => {
+    it('rethrows when fetchAppPage throws HttpError 500', async () => {
       const err = new HttpError('Internal Server Error', 500);
-      vi.mocked(common.doRequest).mockRejectedValueOnce(err);
+      vi.mocked(common.fetchAppPage).mockRejectedValueOnce(err);
 
       await expect(similar({ id: 999, country: DEFAULT_COUNTRY })).rejects.toThrow(err);
     });
@@ -157,7 +157,7 @@ describe('similar', () => {
           <a href="https://apps.apple.com/us/app/foo/id111">App 1</a>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(111, 'App 1')]);
 
       const results = await similar({
@@ -177,7 +177,9 @@ describe('similar', () => {
     it('throws HttpError preserving status when resolveAppId fails with HttpError', async () => {
       vi.mocked(common.resolveAppId).mockRejectedValueOnce(new HttpError('App not found', 404));
 
-      const err = await similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY }).catch((e) => e);
+      const err = await similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY }).catch(
+        (e) => e
+      );
       expect(err).toBeInstanceOf(HttpError);
       expect(err.message).toBe('Could not resolve app id "com.nonexistent.app": App not found');
       expect(err.status).toBe(404);
@@ -202,7 +204,7 @@ describe('similar', () => {
           <a href="https://apps.apple.com/us/app/bar/id222">App 2</a>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       // lookup returns only 1 of the 2 requested apps
       vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(111, 'App 1')]);
 
@@ -221,7 +223,7 @@ describe('similar', () => {
           <a href="https://apps.apple.com/us/app/bar/id222">App 2</a>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       vi.mocked(common.lookup).mockResolvedValueOnce([
         minimalApp(111, 'App 1'),
         minimalApp(222, 'App 2'),
@@ -246,7 +248,7 @@ describe('similar', () => {
           <a href="https://apps.apple.com/us/app/baz/id222">App 2</a>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       vi.mocked(common.lookup).mockResolvedValueOnce([
         minimalApp(111, 'App 1'),
         minimalApp(222, 'App 2'),
@@ -259,8 +261,14 @@ describe('similar', () => {
       });
 
       expect(results).toHaveLength(2);
-      expect(results[0]).toEqual({ app: minimalApp(111, 'App 1'), linkType: 'customers-also-bought' });
-      expect(results[1]).toEqual({ app: minimalApp(222, 'App 2'), linkType: 'customers-also-bought' });
+      expect(results[0]).toEqual({
+        app: minimalApp(111, 'App 1'),
+        linkType: 'customers-also-bought',
+      });
+      expect(results[1]).toEqual({
+        app: minimalApp(222, 'App 2'),
+        linkType: 'customers-also-bought',
+      });
     });
 
     it('returns [] when HTML has no similar section (empty entries early return)', async () => {
@@ -270,7 +278,7 @@ describe('similar', () => {
           <p>No app links here.</p>
         </body>
       `;
-      vi.mocked(common.doRequest).mockResolvedValueOnce(html);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
 
       const results = await similar({ id: 999, country: DEFAULT_COUNTRY });
 
@@ -282,7 +290,7 @@ describe('similar', () => {
   describe.skipIf(!runIntegrationTests)('live API', () => {
     beforeAll(async () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
-      vi.mocked(common.doRequest).mockImplementation(actual.doRequest);
+      vi.mocked(common.fetchAppPage).mockImplementation(actual.fetchAppPage);
       vi.mocked(common.lookup).mockImplementation(actual.lookup);
       vi.mocked(common.resolveAppId).mockImplementation(actual.resolveAppId);
     });

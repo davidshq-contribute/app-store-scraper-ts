@@ -57,7 +57,9 @@ describe('suggest', () => {
     await suggest({ term: 'hello world' });
 
     expect(common.doRequest).toHaveBeenCalledWith(
-      expect.stringContaining('https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints'),
+      expect.stringContaining(
+        'https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints'
+      ),
       undefined
     );
     const url = vi.mocked(common.doRequest).mock.calls[0]![0];

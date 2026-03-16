@@ -14,7 +14,7 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   const actual = await importOriginal<typeof common>();
   return {
     ...actual,
-    doRequest: vi.fn(),
+    fetchAppPage: vi.fn(),
     resolveAppId: vi.fn(),
   };
 });
@@ -53,7 +53,7 @@ const EMPTY_HTML = `<!DOCTYPE html><html><body><p>No privacy info</p></body></ht
 
 describe('privacy', () => {
   beforeEach(() => {
-    vi.mocked(common.doRequest).mockReset();
+    vi.mocked(common.fetchAppPage).mockReset();
     vi.mocked(common.resolveAppId).mockReset();
   });
 
@@ -71,7 +71,7 @@ describe('privacy', () => {
   describe('appId resolution', () => {
     it('resolves appId to numeric id before fetching', async () => {
       vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
-      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
       await privacy({ appId: 'com.example.app' });
 
@@ -80,7 +80,7 @@ describe('privacy', () => {
         country: DEFAULT_COUNTRY,
         requestOptions: undefined,
       });
-      expect(common.doRequest).toHaveBeenCalledWith(
+      expect(common.fetchAppPage).toHaveBeenCalledWith(
         expect.stringContaining('id553834731'),
         undefined
       );
@@ -92,34 +92,31 @@ describe('privacy', () => {
       );
 
       await expect(privacy({ appId: 'com.nonexistent' })).rejects.toThrow(HttpError);
-      await expect(privacy({ appId: 'com.nonexistent' })).rejects.toThrow('Could not resolve app id');
+      await expect(privacy({ appId: 'com.nonexistent' })).rejects.toThrow(
+        'Could not resolve app id'
+      );
     });
 
     it('prefers id over appId when both are provided', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce('<html></html>');
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
 
       await privacy({ id: 123, appId: 'com.example.app' });
 
       expect(common.resolveAppId).not.toHaveBeenCalled();
-      expect(common.doRequest).toHaveBeenCalledWith(
-        expect.stringContaining('id123'),
-        undefined
-      );
+      expect(common.fetchAppPage).toHaveBeenCalledWith(expect.stringContaining('id123'), undefined);
     });
   });
 
   describe('HTTP error handling', () => {
     it('returns empty object on 404', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(
-        new HttpError('Not Found', 404, 'https://apps.apple.com/us/app/id999')
-      );
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(null);
 
       const result = await privacy({ id: 999 });
       expect(result).toEqual({});
     });
 
     it('throws on non-404 HTTP errors', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(
+      vi.mocked(common.fetchAppPage).mockRejectedValueOnce(
         new HttpError('Server Error', 500, 'https://apps.apple.com/us/app/id999')
       );
 
@@ -127,7 +124,7 @@ describe('privacy', () => {
     });
 
     it('throws on network errors', async () => {
-      vi.mocked(common.doRequest).mockRejectedValueOnce(new TypeError('fetch failed'));
+      vi.mocked(common.fetchAppPage).mockRejectedValueOnce(new TypeError('fetch failed'));
 
       await expect(privacy({ id: 999 })).rejects.toThrow(TypeError);
     });
@@ -135,14 +132,14 @@ describe('privacy', () => {
 
   describe('fixture-based parsing', () => {
     it('parses privacy policy URL', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(PRIVACY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(PRIVACY_HTML);
 
       const result = await privacy({ id: 123, country: DEFAULT_COUNTRY });
       expect(result.privacyPolicyUrl).toBe('https://example.com/privacy');
     });
 
     it('parses privacy types with categories and data types', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(PRIVACY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(PRIVACY_HTML);
 
       const result = await privacy({ id: 123, country: DEFAULT_COUNTRY });
       expect(result.privacyTypes).toHaveLength(2);
@@ -161,18 +158,18 @@ describe('privacy', () => {
     });
 
     it('returns empty object for HTML with no privacy content', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(EMPTY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(EMPTY_HTML);
 
       const result = await privacy({ id: 123, country: DEFAULT_COUNTRY });
       expect(result).toEqual({});
     });
 
     it('passes country to appPageUrl', async () => {
-      vi.mocked(common.doRequest).mockResolvedValueOnce(EMPTY_HTML);
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(EMPTY_HTML);
 
       await privacy({ id: 123, country: 'gb' });
 
-      const calledUrl = vi.mocked(common.doRequest).mock.calls[0]![0];
+      const calledUrl = vi.mocked(common.fetchAppPage).mock.calls[0]![0];
       expect(calledUrl).toContain('/gb/app/id123');
     });
   });

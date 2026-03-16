@@ -86,13 +86,15 @@ describe('parseRatings', () => {
   });
 
   it('parses totals with thousands separators in .rating-count', () => {
-    const html = '<div><div class="rating-count">1,234 Ratings</div><span class="vote"><span class="total">1234</span></span></div>';
+    const html =
+      '<div><div class="rating-count">1,234 Ratings</div><span class="vote"><span class="total">1234</span></span></div>';
     const result = parseRatings(html);
     expect(result.ratings).toBe(1234);
   });
 
   it('parses totals with localized spacing separators in .rating-count', () => {
-    const html = '<div><div class="rating-count">12\u00A0345 Ratings</div><span class="vote"><span class="total">12345</span></span></div>';
+    const html =
+      '<div><div class="rating-count">12\u00A0345 Ratings</div><span class="vote"><span class="total">12345</span></span></div>';
     const result = parseRatings(html);
     expect(result.ratings).toBe(12345);
   });
@@ -124,8 +126,8 @@ function labeledFixtureHtml(
   const votes = entries
     .map(
       (e) =>
-        `<span class="vote" aria-label="${e.star} star">`
-        + `<span class="total">${e.count}</span></span>`
+        `<span class="vote" aria-label="${e.star} star">` +
+        `<span class="total">${e.count}</span></span>`
     )
     .join('');
   return `<div>${ratingCount}${votes}</div>`;
