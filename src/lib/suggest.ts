@@ -20,7 +20,7 @@ const xmlParser = new XMLParser({
  * @example
  * ```typescript
  * const suggestions = await suggest({ term: 'min' });
- *  Returns: [{ term: 'minecraft' }, { term: 'minecraft pocket edition' }, ...]
+ * // Returns: [{ term: 'minecraft' }, { term: 'minecraft pocket edition' }, ...]
  * ```
  */
 export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
