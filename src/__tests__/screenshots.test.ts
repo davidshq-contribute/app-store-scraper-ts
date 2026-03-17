@@ -24,7 +24,7 @@ describe('screenshots', () => {
         expect(extractScreenshotUrl(srcset)).toContain('/bar/');
       });
 
-      it('preserves jpg and png extensions', () => {
+      it('preserves jpg, png, and avif extensions', () => {
         expect(extractScreenshotUrl(`${base}.jpg 100w`)).toBe(
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.jpg'
         );
@@ -33,6 +33,9 @@ describe('screenshots', () => {
         );
         expect(extractScreenshotUrl(`${base}.png 100w`)).toBe(
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.png'
+        );
+        expect(extractScreenshotUrl(`${base}.avif 100w`)).toBe(
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.avif'
         );
       });
 
@@ -60,13 +63,28 @@ describe('screenshots', () => {
           'https://is1-ssl.mzstatic.com/image/thumb/foo/392x696bb.webp'
         );
       });
+
+      it('matches only at end of URL (regex $ anchor) — path with duplicate size pattern', () => {
+        // If $ anchor were removed, regex might match first occurrence and produce wrong result
+        const srcset =
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/bar/100x100bb.webp 600w';
+        const result = extractScreenshotUrl(srcset);
+        expect(result).toBe(
+          'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/bar/392x696bb.webp'
+        );
+      });
+
+      it('rejects URL with trailing content after extension (no match)', () => {
+        // URL has extra path after .webp — regex should not match, returns original
+        const srcset = 'https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/extra 100w';
+        const result = extractScreenshotUrl(srcset);
+        // Parser extracts URL as parts[0]; regex does not match so replace returns original
+        expect(result).toBe('https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp/extra');
+      });
     });
 
     describe('parseScreenshotsFromHtml', () => {
-      function fixtureShelf(
-        listClass: string,
-        srcset: string
-      ): string {
+      function fixtureShelf(listClass: string, srcset: string): string {
         return `<ul class="shelf-grid__list ${listClass}">
           <li><picture><source type="image/webp" srcset="${srcset}"></source></picture></li>
         </ul>`;
@@ -108,153 +126,193 @@ describe('screenshots', () => {
         expect(out.ipadScreenshots).toEqual([]);
       });
 
-      it('only matches source[type="image/webp"] inside the correct ul', () => {
+      it('does not cross-contaminate between screenshot containers', () => {
         const html =
           fixtureShelf('shelf-grid__list--grid-type-ScreenshotPhone', sampleSrcset) +
-          '<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPad">' +
-          '<source type="image/jpeg" srcset="https://other.com/bar.jpg 1w"></source></ul>';
+          `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPad">
+            <li><picture><source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/bar/100x100bb.jpg 1w"></source></picture></li>
+          </ul>`;
         const out = parseScreenshotsFromHtml(html);
         expect(out.screenshots).toHaveLength(1);
-        expect(out.ipadScreenshots).toEqual([]);
+        expect(out.ipadScreenshots).toHaveLength(1);
+        expect(out.ipadScreenshots[0]).toMatch(/392x696bb\.jpg$/);
+      });
+
+      it('falls back to non-webp source when webp is absent', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture><source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.jpg 100w"></source></picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/392x696bb\.jpg$/);
+      });
+
+      it('prefers webp source over jpeg when both are present', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture>
+            <source type="image/webp" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.webp 100w">
+            <source type="image/jpeg" srcset="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.jpg 100w">
+          </picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/\.webp$/);
+      });
+
+      it('falls back to img element when no source elements exist', () => {
+        const html = `<ul class="shelf-grid__list shelf-grid__list--grid-type-ScreenshotPhone">
+          <li><picture><img src="https://is1-ssl.mzstatic.com/image/thumb/foo/100x100bb.png"></picture></li>
+        </ul>`;
+        const out = parseScreenshotsFromHtml(html);
+        expect(out.screenshots).toHaveLength(1);
+        expect(out.screenshots[0]).toMatch(/392x696bb\.png$/);
       });
     });
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
-  // Test with the specified app ID 6756671942 (Bygone - Yesterday's Weather)
-  // Note: This app's screenshots are not available via iTunes API but are scraped from the App Store page
-  describe('app ID 6756671942 (Bygone - scraped screenshots)', () => {
-    it('should fetch app and return screenshot arrays', { timeout: 15000 }, async () => {
-      const result = await app({ id: 6756671942 });
+    // Test with the specified app ID 6756671942 (Bygone - Yesterday's Weather)
+    // Note: This app's screenshots are not available via iTunes API but are scraped from the App Store page
+    describe('app ID 6756671942 (Bygone - scraped screenshots)', () => {
+      it('should fetch app and return screenshot arrays', { timeout: 15000 }, async () => {
+        const result = await app({ id: 6756671942 });
 
-      expect(result).toBeDefined();
-      expect(result.id).toBe(6756671942);
-      expect(result.title).toBe('Bygone - Yesterday\'s Weather');
+        expect(result).toBeDefined();
+        expect(result.id).toBe(6756671942);
+        expect(result.title).toBe("Bygone - Yesterday's Weather");
 
-      // Verify screenshots arrays exist
-      expect(result.screenshots).toBeDefined();
-      expect(Array.isArray(result.screenshots)).toBe(true);
+        // Verify screenshots arrays exist
+        expect(result.screenshots).toBeDefined();
+        expect(Array.isArray(result.screenshots)).toBe(true);
 
-      expect(result.ipadScreenshots).toBeDefined();
-      expect(Array.isArray(result.ipadScreenshots)).toBe(true);
+        expect(result.ipadScreenshots).toBeDefined();
+        expect(Array.isArray(result.ipadScreenshots)).toBe(true);
 
-      expect(result.appletvScreenshots).toBeDefined();
-      expect(Array.isArray(result.appletvScreenshots)).toBe(true);
-    });
+        expect(result.appletvScreenshots).toBeDefined();
+        expect(Array.isArray(result.appletvScreenshots)).toBe(true);
+      });
 
-    it('should scrape screenshots when iTunes API returns empty arrays', { timeout: 15000 }, async () => {
-      const result = await app({ id: 6756671942 });
+      it(
+        'should scrape screenshots when iTunes API returns empty arrays',
+        { timeout: 15000 },
+        async () => {
+          const result = await app({ id: 6756671942 });
 
-      // This app has screenshots on the App Store page but not via iTunes API
-      // Our fallback scraping should find them
-      expect(result.screenshots.length).toBeGreaterThan(0);
+          // This app has screenshots on the App Store page but not via iTunes API
+          // Our fallback scraping should find them
+          expect(result.screenshots.length).toBeGreaterThan(0);
 
-      // Verify the screenshot URLs are valid (format preserved: webp, jpg, png)
-      result.screenshots.forEach((url) => {
-        expect(url).toMatch(/^https:\/\/is\d+-ssl\.mzstatic\.com/);
-        expect(url).toMatch(/\.(webp|jpg|jpeg|png)$/i);
+          // Verify the screenshot URLs are valid (format preserved: webp, jpg, png)
+          result.screenshots.forEach((url) => {
+            expect(url).toMatch(/^https:\/\/is\d+-ssl\.mzstatic\.com/);
+            expect(url).toMatch(/\.(webp|jpg|jpeg|png|avif)$/i);
+          });
+        }
+      );
+
+      it('should have accessible screenshot URLs from scraping', { timeout: 30000 }, async () => {
+        const result = await app({ id: 6756671942 });
+
+        // Test that the scraped screenshot URL is accessible
+        const screenshotUrl = result.screenshots[0];
+        expect(screenshotUrl).toBeDefined();
+
+        if (screenshotUrl) {
+          const response = await fetch(screenshotUrl, { method: 'HEAD' });
+          expect(response.ok).toBe(true);
+          expect(response.headers.get('content-type')).toMatch(/image\//);
+        }
       });
     });
 
-    it('should have accessible screenshot URLs from scraping', { timeout: 30000 }, async () => {
-      const result = await app({ id: 6756671942 });
+    // Test with an app that HAS screenshots (Minecraft)
+    describe('app with screenshots (Minecraft)', () => {
+      it('should fetch screenshots for Minecraft app', { timeout: 15000 }, async () => {
+        const result = await app({ id: 479516143 });
 
-      // Test that the scraped screenshot URL is accessible
-      const screenshotUrl = result.screenshots[0];
-      expect(screenshotUrl).toBeDefined();
+        expect(result.screenshots).toBeDefined();
+        expect(Array.isArray(result.screenshots)).toBe(true);
+        expect(result.screenshots.length).toBeGreaterThan(0);
 
-      if (screenshotUrl) {
-        const response = await fetch(screenshotUrl, { method: 'HEAD' });
-        expect(response.ok).toBe(true);
-        expect(response.headers.get('content-type')).toMatch(/image\//);
-      }
-    });
-  });
-
-  // Test with an app that HAS screenshots (Minecraft)
-  describe('app with screenshots (Minecraft)', () => {
-    it('should fetch screenshots for Minecraft app', { timeout: 15000 }, async () => {
-      const result = await app({ id: 479516143 });
-
-      expect(result.screenshots).toBeDefined();
-      expect(Array.isArray(result.screenshots)).toBe(true);
-      expect(result.screenshots.length).toBeGreaterThan(0);
-
-      // Minecraft should have iPhone screenshots
-      expect(result.screenshots.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should have valid screenshot URLs', { timeout: 15000 }, async () => {
-      const result = await app({ id: 479516143 });
-
-      // Validate iPhone screenshots
-      result.screenshots.forEach((url) => {
-        expect(url).toMatch(/^https:\/\//);
-        expect(url).toMatch(/mzstatic\.com/);
+        // Minecraft should have iPhone screenshots
+        expect(result.screenshots.length).toBeGreaterThanOrEqual(1);
       });
 
-      // Validate iPad screenshots if present
-      if (result.ipadScreenshots.length > 0) {
-        result.ipadScreenshots.forEach((url) => {
+      it('should have valid screenshot URLs', { timeout: 15000 }, async () => {
+        const result = await app({ id: 479516143 });
+
+        // Validate iPhone screenshots
+        result.screenshots.forEach((url) => {
           expect(url).toMatch(/^https:\/\//);
           expect(url).toMatch(/mzstatic\.com/);
         });
-      }
-    });
 
-    it('should have screenshots that are accessible', { timeout: 30000 }, async () => {
-      const result = await app({ id: 479516143 });
+        // Validate iPad screenshots if present
+        if (result.ipadScreenshots.length > 0) {
+          result.ipadScreenshots.forEach((url) => {
+            expect(url).toMatch(/^https:\/\//);
+            expect(url).toMatch(/mzstatic\.com/);
+          });
+        }
+      });
 
-      // Test at least one screenshot URL is accessible
-      const screenshotUrl = result.screenshots[0];
+      it('should have screenshots that are accessible', { timeout: 30000 }, async () => {
+        const result = await app({ id: 479516143 });
 
-      expect(screenshotUrl).toBeDefined();
+        // Test at least one screenshot URL is accessible
+        const screenshotUrl = result.screenshots[0];
 
-      if (screenshotUrl) {
-        const response = await fetch(screenshotUrl, { method: 'HEAD' });
-        expect(response.ok).toBe(true);
-        expect(response.headers.get('content-type')).toMatch(/image\//);
-      }
-    });
+        expect(screenshotUrl).toBeDefined();
 
-    it('should return screenshot arrays are always defined', { timeout: 15000 }, async () => {
-      const result = await app({ id: 479516143 });
+        if (screenshotUrl) {
+          const response = await fetch(screenshotUrl, { method: 'HEAD' });
+          expect(response.ok).toBe(true);
+          expect(response.headers.get('content-type')).toMatch(/image\//);
+        }
+      });
 
-      // Even if empty, the arrays should be defined
-      expect(result.screenshots).toBeDefined();
-      expect(result.ipadScreenshots).toBeDefined();
-      expect(result.appletvScreenshots).toBeDefined();
-    });
-  });
+      it('should return screenshot arrays are always defined', { timeout: 15000 }, async () => {
+        const result = await app({ id: 479516143 });
 
-  describe('screenshot URL structure', () => {
-    it('should return screenshot URLs with proper Apple CDN format', { timeout: 15000 }, async () => {
-      const result = await app({ id: 479516143 });
-
-      const allScreenshots = [
-        ...result.screenshots,
-        ...result.ipadScreenshots,
-        ...result.appletvScreenshots
-      ];
-
-      expect(allScreenshots.length).toBeGreaterThan(0);
-
-      // Apple uses various URL formats, but they should all be from mzstatic.com
-      allScreenshots.forEach(url => {
-        expect(url).toMatch(/^https:\/\/is\d+-ssl\.mzstatic\.com/);
+        // Even if empty, the arrays should be defined
+        expect(result.screenshots).toBeDefined();
+        expect(result.ipadScreenshots).toBeDefined();
+        expect(result.appletvScreenshots).toBeDefined();
       });
     });
-  });
 
-  describe('screenshots for different countries', () => {
-    it('should fetch screenshots regardless of country', { timeout: 15000 }, async () => {
-      const usResult = await app({ id: 479516143, country: DEFAULT_COUNTRY });
+    describe('screenshot URL structure', () => {
+      it(
+        'should return screenshot URLs with proper Apple CDN format',
+        { timeout: 15000 },
+        async () => {
+          const result = await app({ id: 479516143 });
 
-      // Screenshots should work regardless of country
-      expect(usResult.screenshots).toBeDefined();
-      expect(Array.isArray(usResult.screenshots)).toBe(true);
-      expect(usResult.screenshots.length).toBeGreaterThan(0);
+          const allScreenshots = [
+            ...result.screenshots,
+            ...result.ipadScreenshots,
+            ...result.appletvScreenshots,
+          ];
+
+          expect(allScreenshots.length).toBeGreaterThan(0);
+
+          // Apple uses various URL formats, but they should all be from mzstatic.com
+          allScreenshots.forEach((url) => {
+            expect(url).toMatch(/^https:\/\/is\d+-ssl\.mzstatic\.com/);
+          });
+        }
+      );
     });
-  });
+
+    describe('screenshots for different countries', () => {
+      it('should fetch screenshots regardless of country', { timeout: 15000 }, async () => {
+        const usResult = await app({ id: 479516143, country: DEFAULT_COUNTRY });
+
+        // Screenshots should work regardless of country
+        expect(usResult.screenshots).toBeDefined();
+        expect(Array.isArray(usResult.screenshots)).toBe(true);
+        expect(usResult.screenshots.length).toBeGreaterThan(0);
+      });
+    });
   });
 });

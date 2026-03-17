@@ -1,10 +1,18 @@
 /**
- * Zod schemas for runtime validation of API responses
+ * Zod schemas for runtime validation of API responses.
+ *
+ * All schemas use `safeParse` or `parse` in the consuming modules. Invalid responses
+ * throw clear errors instead of propagating undefined values. Use `z.looseObject` for
+ * iTunes/RSS responses to allow extra fields; use `z.object` for strict shapes.
  */
 import { z } from 'zod';
 
 /**
- * iTunes API app response schema
+ * iTunes API app response schema.
+ *
+ * Validates a single app object from the iTunes Lookup API or Search API.
+ * Used by `app()`, `search()`, `list()` (fullDetail), `developer()`, `similar()`.
+ * `fileSizeBytes` accepts string or number per Apple's API behavior.
  */
 export const iTunesAppResponseSchema = z.looseObject({
   wrapperType: z.string().optional(),
@@ -47,7 +55,10 @@ export const iTunesAppResponseSchema = z.looseObject({
 export type ITunesAppResponse = z.infer<typeof iTunesAppResponseSchema>;
 
 /**
- * iTunes lookup API response schema
+ * iTunes Lookup API response schema.
+ *
+ * Full response shape from `https://itunes.apple.com/lookup?id=...`.
+ * Contains `resultCount` and `results` array of app objects.
  */
 export const iTunesLookupResponseSchema = z.object({
   resultCount: z.number(),
@@ -57,9 +68,12 @@ export const iTunesLookupResponseSchema = z.object({
 export type ITunesLookupResponse = z.infer<typeof iTunesLookupResponseSchema>;
 
 /**
- * RSS feed entry schema for lists (minimal for validation).
- * Full list feed entries also include im:name, im:image, link, im:price, summary,
- * im:artist, category, im:releaseDate; we parse these in list.ts when fullDetail is false.
+ * RSS feed entry schema for App Store list feeds.
+ *
+ * Minimal structure for validation; used by `list()` when fullDetail is false.
+ * Full entries include im:name, im:image, link, im:price, summary, im:artist,
+ * category, im:releaseDate. Parsed in list.ts. `im:image` and `link` accept
+ * single object or array (Apple varies response format).
  */
 export const rssFeedEntrySchema = z.looseObject({
   id: z
@@ -127,13 +141,17 @@ export const rssFeedEntrySchema = z.looseObject({
 
 export type RssFeedEntry = z.infer<typeof rssFeedEntrySchema>;
 
-/** RSS feed schema; entry may be a single object or array depending on response. */
+/**
+ * RSS feed wrapper schema for App Store list feeds.
+ *
+ * Top-level structure for list/chart RSS feeds (e.g. top free, top paid).
+ * Used by `list()`. `entry` may be a single object or array depending on
+ * Apple's response format. For reviews, use `reviewsFeedSchema`.
+ */
 export const rssFeedSchema = z.object({
   feed: z
     .object({
-      entry: z
-        .union([rssFeedEntrySchema, z.array(rssFeedEntrySchema)])
-        .optional(),
+      entry: z.union([rssFeedEntrySchema, z.array(rssFeedEntrySchema)]).optional(),
     })
     .optional(),
 });
@@ -141,7 +159,10 @@ export const rssFeedSchema = z.object({
 export type RssFeed = z.infer<typeof rssFeedSchema>;
 
 /**
- * Review entry schema
+ * Review entry schema for the reviews RSS feed.
+ *
+ * Validates a single review from `https://itunes.apple.com/.../rss/customerreviews/id=.../page=`.
+ * Used by `reviews()`. Nested structure: author, im:version, im:rating, title, content, etc.
  */
 export const reviewEntrySchema = z.object({
   author: z
@@ -190,6 +211,12 @@ export const reviewEntrySchema = z.object({
     .optional(),
 });
 
+/**
+ * Reviews RSS feed wrapper schema.
+ *
+ * Top-level structure for the customer reviews feed. `entry` may be a single
+ * review object or array.
+ */
 export const reviewsFeedSchema = z.object({
   feed: z
     .object({
@@ -203,7 +230,11 @@ export type ReviewsFeed = z.infer<typeof reviewsFeedSchema>;
 
 /**
  * Suggestion response schema.
- * Apple's API returns plist.dict with keys "title" and "hints"; hints is an array of strings.
+ *
+ * Validates the plist response from Apple's suggest endpoint.
+ * Apple returns `plist.dict` with `title` and `hints` (array of strings).
+ * `dict.array` may be a single object or array depending on response format.
+ * Used by `suggest()`.
  */
 export const suggestResponseSchema = z.object({
   plist: z

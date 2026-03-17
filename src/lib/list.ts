@@ -1,8 +1,17 @@
 import type { App, ListApp } from '../types/app.js';
 import type { ListOptions } from '../types/options.js';
-import { collection as collectionConstants, DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, lookup, ensureArray, parseJson } from './common.js';
-import { validateCountry, validateCollection, validateCategory, validateListNum } from './validate.js';
+import {
+  collection as collectionConstants,
+  DEFAULT_COUNTRY,
+  ITUNES_API_MAX_LIMIT,
+} from '../types/constants.js';
+import { doRequest, lookup, ensureArray, parseAndValidate } from './common.js';
+import {
+  validateCountry,
+  validateCollection,
+  validateCategory,
+  validateListNum,
+} from './validate.js';
 import { rssFeedSchema, type RssFeedEntry } from './schemas.js';
 
 /** Parses the app URL from a list feed entry (link with rel="alternate"). */
@@ -78,9 +87,15 @@ function rssEntryToListApp(entry: RssFeedEntry): ListApp | null {
  * feed—no extra lookup requests. When `fullDetail: true`, fetches full details via the lookup API
  * and returns {@link App[]}.
  *
- * @param options - Options for filtering and pagination
+ * @param options - Options for filtering and pagination.
+ *   **Note:** `lang` only takes effect when `fullDetail: true` (passed to the lookup API).
+ *   The RSS feed endpoint used for `fullDetail: false` does not support a language parameter.
  * @returns Promise resolving to {@link ListApp[]} when `fullDetail` is false, or {@link App[]} when true.
  *   If `fullDetail` is a boolean variable, the return type is {@link ListApp[]} | {@link App[]}.
+ *   Feed entries with a missing or unparseable `im:id` are skipped; when this happens a
+ *   `console.warn` is emitted with the count of dropped entries.
+ * @throws {ValidationError} if `country`, `collection`, `category`, or `num` are invalid
+ * @throws {HttpError} on non-OK HTTP response from the iTunes RSS feed
  *
  * @example
  * ```typescript
@@ -114,7 +129,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   if (category != null) validateCategory(category);
   validateListNum(num);
 
-  const limit = Math.min(num, 200);
+  const limit = Math.min(num, ITUNES_API_MAX_LIMIT);
 
   let url = `https://itunes.apple.com/${country}/rss/${collection}`;
   if (category != null) {
@@ -123,16 +138,7 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
   url += `/limit=${limit}/json`;
 
   const body = await doRequest(url, requestOptions);
-  const parsedData = parseJson(body);
-  const validationResult = rssFeedSchema.safeParse(parsedData);
-
-  if (!validationResult.success) {
-    throw new Error(
-      `List API response validation failed: ${validationResult.error.message}`
-    );
-  }
-
-  const data = validationResult.data;
+  const data = parseAndValidate(body, rssFeedSchema, 'List API response');
   const entries = ensureArray(data.feed?.entry);
 
   if (entries.length === 0) {
@@ -141,21 +147,39 @@ export async function list(options: ListOptions = {}): Promise<ListApp[] | App[]
 
   if (!fullDetail) {
     const result: ListApp[] = [];
+    let skipped = 0;
     for (const entry of entries) {
       const app = rssEntryToListApp(entry);
-      if (app) result.push(app);
+      if (app) {
+        result.push(app);
+      } else {
+        skipped++;
+      }
+    }
+    if (skipped > 0) {
+      console.warn(`list(): skipped ${skipped} feed entries with missing or invalid id`);
     }
     return result;
   }
 
-  const ids = entries
-    .map((entry) => {
-      const idStr = entry.id?.attributes?.['im:id'];
-      if (!idStr) return null;
-      const n = parseInt(idStr, 10);
-      return Number.isNaN(n) ? null : n;
-    })
-    .filter((id): id is number => id !== null);
+  const ids: number[] = [];
+  let skipped = 0;
+  for (const entry of entries) {
+    const idStr = entry.id?.attributes?.['im:id'];
+    if (!idStr) {
+      skipped++;
+      continue;
+    }
+    const n = parseInt(idStr, 10);
+    if (Number.isNaN(n)) {
+      skipped++;
+      continue;
+    }
+    ids.push(n);
+  }
+  if (skipped > 0) {
+    console.warn(`list(): skipped ${skipped} feed entries with missing or invalid id`);
+  }
 
   if (ids.length === 0) {
     return [];

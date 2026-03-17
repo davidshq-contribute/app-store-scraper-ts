@@ -4,7 +4,7 @@ import type { AppOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { appPageUrl, doRequest, lookup, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError } from './errors.js';
+import { HttpError, RatingsEmptyError } from './errors.js';
 import { ratings } from './ratings.js';
 
 /**
@@ -20,7 +20,7 @@ import { ratings } from './ratings.js';
  */
 export function extractScreenshotUrl(srcset: string): string | null {
   // srcset format: "url1 300w, url2 600w, ..."
-  const entries = srcset.split(',').map(entry => {
+  const entries = srcset.split(',').map((entry) => {
     const parts = entry.trim().split(/\s+/);
     const url = parts[0];
     const widthPart = parts[1];
@@ -34,12 +34,16 @@ export function extractScreenshotUrl(srcset: string): string | null {
   const best = entries[0];
 
   if (best?.url) {
-    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png).
+    // Normalize resolution to 392x696, preserve original extension (webp, jpg, png, avif).
     // Optional (\\?.*)? allows Apple CDN query params (e.g. ?q=80) so normalization still matches.
     return best.url.replace(
-      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png)(\?.*)?$/i,
-      (_match: string, _opt: string | undefined, ext: string | undefined, query: string | undefined) =>
-        `/392x696bb.${(ext ?? 'webp').toLowerCase()}${query ?? ''}`
+      /\/\d+x\d+bb(-\d+)?\.(webp|jpg|jpeg|png|avif)(\?.*)?$/i,
+      (
+        _match: string,
+        _opt: string | undefined,
+        ext: string | undefined,
+        query: string | undefined
+      ) => `/392x696bb.${(ext ?? 'webp').toLowerCase()}${query ?? ''}`
     );
   }
 
@@ -70,29 +74,26 @@ export function parseScreenshotsFromHtml(html: string): {
   // iPad screenshots: shelf-grid__list--grid-type-ScreenshotPad
   // Apple TV screenshots: shelf-grid__list--grid-type-ScreenshotAppleTv
 
-  $('ul.shelf-grid__list--grid-type-ScreenshotPhone source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) screenshots.add(screenshotUrl);
-    }
-  });
+  // Extract one screenshot URL per <picture>, preferring webp but falling
+  // back to any <source> or <img> when the webp variant is absent.
+  function collectFromContainer(selector: string, target: Set<string>): void {
+    $(`${selector} picture`).each((_, pictureEl) => {
+      const $pic = $(pictureEl);
+      const srcset =
+        $pic.find('source[type="image/webp"]').attr('srcset') ??
+        $pic.find('source[srcset]').attr('srcset') ??
+        $pic.find('img').attr('srcset') ??
+        $pic.find('img').attr('src');
+      if (srcset) {
+        const screenshotUrl = extractScreenshotUrl(srcset);
+        if (screenshotUrl) target.add(screenshotUrl);
+      }
+    });
+  }
 
-  $('ul.shelf-grid__list--grid-type-ScreenshotPad source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) ipadScreenshots.add(screenshotUrl);
-    }
-  });
-
-  $('ul.shelf-grid__list--grid-type-ScreenshotAppleTv source[type="image/webp"]').each((_, el) => {
-    const srcset = $(el).attr('srcset');
-    if (srcset) {
-      const screenshotUrl = extractScreenshotUrl(srcset);
-      if (screenshotUrl) appletvScreenshots.add(screenshotUrl);
-    }
-  });
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotPhone', screenshots);
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotPad', ipadScreenshots);
+  collectFromContainer('ul.shelf-grid__list--grid-type-ScreenshotAppleTv', appletvScreenshots);
 
   return {
     screenshots: Array.from(screenshots),
@@ -127,10 +128,12 @@ async function scrapeScreenshots(
 }
 
 /**
- * Retrieves detailed information about an app from the App Store
+ * Retrieves detailed information about an app from the App Store.
  * @param options - Options including either id (trackId) or appId (bundleId)
  * @returns Promise resolving to app details
- * @throws Error if neither id nor appId is provided
+ * @throws {ValidationError} if neither `id` nor `appId` is provided, or if `country` is invalid
+ * @throws {HttpError} on non-OK HTTP response from the iTunes API
+ * @throws {Error} if the app is not found in the iTunes lookup
  *
  * @example
  * ```typescript
@@ -145,9 +148,16 @@ async function scrapeScreenshots(
  * ```
  */
 export async function app(options: AppOptions): Promise<App> {
-  validateRequiredField(options as Record<string, unknown>, ['id', 'appId'], 'Either id or appId is required');
+  validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
-  const { id, appId, country = DEFAULT_COUNTRY, lang, ratings: includeRatings, requestOptions } = options;
+  const {
+    id,
+    appId,
+    country = DEFAULT_COUNTRY,
+    lang,
+    ratings: includeRatings,
+    requestOptions,
+  } = options;
   validateCountry(country);
   // lookupId is defined: validateRequiredField ensures at least one of id, appId is present
   const lookupId = (id ?? appId) as string | number;
@@ -161,7 +171,7 @@ export async function app(options: AppOptions): Promise<App> {
   );
 
   if (apps.length === 0) {
-    throw new Error(`App not found: ${id || appId}`);
+    throw new HttpError(`App not found: ${id || appId}`, 404);
   }
 
   const appData = apps[0]!;
@@ -172,25 +182,32 @@ export async function app(options: AppOptions): Promise<App> {
     appData.ipadScreenshots.length === 0 &&
     appData.appletvScreenshots.length === 0;
 
+  let result: App = appData;
+
   if (hasNoScreenshots) {
     const scrapedScreenshots = await scrapeScreenshots(appData.id, country, requestOptions);
-    appData.screenshots = scrapedScreenshots.screenshots;
-    appData.ipadScreenshots = scrapedScreenshots.ipadScreenshots;
-    appData.appletvScreenshots = scrapedScreenshots.appletvScreenshots;
+    result = {
+      ...result,
+      screenshots: scrapedScreenshots.screenshots,
+      ipadScreenshots: scrapedScreenshots.ipadScreenshots,
+      appletvScreenshots: scrapedScreenshots.appletvScreenshots,
+    };
   }
 
   // Optionally include rating histogram
   if (includeRatings) {
     try {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
-      appData.histogram = ratingsData.histogram;
+      result = { ...result, histogram: ratingsData.histogram };
     } catch (error) {
-      // 404 = ratings endpoint not found; 204 = 200 OK but empty body (no ratings data). Continue without histogram.
-      if (!(error instanceof HttpError && (error.status === 404 || error.status === 204))) {
+      // Swallow "no ratings available" cases; propagate everything else.
+      const isNotFound = error instanceof HttpError && error.status === 404;
+      const isEmpty = error instanceof RatingsEmptyError;
+      if (!isNotFound && !isEmpty) {
         throw error;
       }
     }
   }
 
-  return appData;
+  return result;
 }

@@ -5,12 +5,14 @@ import type { Collection, Category, Device, Sort } from './constants.js';
  *
  * **Supported:**
  * - `headers` – Custom headers merged over the default User-Agent, Accept, and Accept-Language.
+ *   To override the User-Agent (e.g. if the default ages and triggers bot detection), pass
+ *   `headers: { 'User-Agent': '...' }`.
  * - `timeoutMs` – Request timeout in milliseconds (default: 15000). Must be a positive finite number. Uses `AbortSignal.timeout()`.
  * - `retries` – Number of retries for transient failures (default: 0, opt-in). Retries on 429, 503,
  *   network errors, and timeout (AbortError), with exponential backoff. Set to a positive value (e.g. 2) to enable.
  */
 export interface RequestOptions {
-  /** Custom request headers (merged with defaults). */
+  /** Custom request headers (merged with defaults). Pass `User-Agent` to override the built-in value. */
   headers?: Record<string, string>;
   /** Request timeout in milliseconds. Must be positive and finite. Default 15000. */
   timeoutMs?: number;
@@ -96,9 +98,10 @@ export interface DeveloperOptions extends BaseOptions {
 }
 
 /**
- * Options for the reviews() method
+ * Options for the reviews() method.
+ * Omits `lang`: the reviews RSS feed is locale-based (determined by country/store-front), not per-request language.
  */
-export interface ReviewsOptions extends BaseOptions {
+export interface ReviewsOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID */
   id?: number;
   /** Bundle ID */
@@ -110,7 +113,8 @@ export interface ReviewsOptions extends BaseOptions {
 }
 
 /**
- * Options for the ratings() method
+ * Options for the ratings() method.
+ * Omits `lang`: the customer-reviews endpoint uses the store-front header, not a language parameter.
  */
 export interface RatingsOptions extends Omit<BaseOptions, 'lang'> {
   /** Track ID (required) */
@@ -135,7 +139,7 @@ export interface SimilarOptions extends BaseOptions {
 
 /**
  * Options for the suggest() method.
- * Note: suggest uses a global hints endpoint and does not take a country parameter.
+ * Omits `country` and `lang`: Apple's hints endpoint is global (not store-specific).
  */
 export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
   /** Search term (required) */
@@ -143,18 +147,23 @@ export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
 }
 
 /**
- * Options for the privacy() method
+ * Options for the privacy() method.
+ * Omits `lang`: the App Store page does not vary privacy labels by language parameter.
  */
 export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID */
+  id?: number;
+  /** Bundle ID (e.g., com.example.app) */
+  appId?: string;
 }
 
 /**
- * Options for the versionHistory() method
+ * Options for the versionHistory() method.
+ * Omits `lang`: the App Store page renders version history in the store's locale, not per-request.
  */
 export interface VersionHistoryOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID */
+  id?: number;
+  /** Bundle ID (e.g., com.example.app) */
+  appId?: string;
 }
-

@@ -3,6 +3,15 @@
  */
 export const DEFAULT_COUNTRY = 'us';
 
+/** iTunes Search API and list RSS feed maximum results per request (Apple-enforced). */
+export const ITUNES_API_MAX_LIMIT = 200;
+
+/** Maximum character length for body preview in parseJson error messages. */
+export const BODY_PREVIEW_MAX_LEN = 200;
+
+/** Apple's US App Store front ID, used as the ultimate fallback when a country code is not in {@link markets}. */
+export const DEFAULT_STORE_FRONT_ID = 143441;
+
 /**
  * App Store collection types
  */

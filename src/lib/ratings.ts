@@ -2,16 +2,16 @@ import * as cheerio from 'cheerio';
 import type { Ratings, RatingHistogram } from '../types/app.js';
 import type { RatingsOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, storeId } from './common.js';
+import { doRequest, storeId, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
-import { HttpError } from './errors.js';
+import { RatingsEmptyError } from './errors.js';
 
 /**
  * Retrieves the rating histogram for an app (1-5 star breakdown).
  *
  * @param options - Options including app id
  * @returns Promise resolving to ratings with total count and histogram
- * @throws {HttpError} When the response is 200 but the body is empty, throws with message `No ratings data returned` and `status: 204` (No Content). Use `err instanceof HttpError && err.status === 204` to distinguish from real HTTP 404.
+ * @throws {RatingsEmptyError} When the response is 200 OK but the body is empty. Use `err instanceof RatingsEmptyError` to treat as "no data".
  *
  * `requestOptions.headers` can override the default `X-Apple-Store-Front` header; this is intentional for advanced use cases (e.g. store-specific or regional testing).
  *
@@ -19,15 +19,14 @@ import { HttpError } from './errors.js';
  * ```typescript
  * const result = await ratings({ id: 553834731 });
  * // Returns: { ratings: 4800, histogram: { 1: 100, 2: 200, 3: 500, 4: 1000, 5: 3000 } }
+ * // May include optional warnings when histogram sum does not match total.
  * ```
  */
 export async function ratings(options: RatingsOptions): Promise<Ratings> {
   const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
+  validateRequiredField(options, ['id'], 'id is required');
   validateCountry(country);
-  if (id == null) {
-    throw new Error('id is required');
-  }
 
   const storeFront = storeId(country);
   const url = `https://itunes.apple.com/${country}/customer-reviews/id${id}?displayable-kind=11`;
@@ -41,7 +40,7 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
   });
 
   if (html.length === 0) {
-    throw new HttpError('No ratings data returned', 204, url);
+    throw new RatingsEmptyError(url);
   }
 
   return parseRatings(html);
@@ -51,53 +50,93 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
  * Parses ratings from iTunes customer-reviews HTML.
  * Exported for unit testing (histogram shape / BUG-2).
  * When the histogram bar sum does not match the total count (e.g. page structure change),
- * logs a warning and still returns the parsed result.
+ * returns the parsed result with a `warnings` array; consumers control logging.
  * @param html - Raw HTML from the customer-reviews page
- * @returns Ratings with total count and histogram (keys 1–5 only)
+ * @returns Ratings with total count and histogram (keys 1–5 only). May include `warnings` when histogram sum ≠ total.
  */
 export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
   // Extract total rating count
-  const ratingsMatch = $('.rating-count').text().match(/\d+/);
-  const totalRatings = Array.isArray(ratingsMatch) && ratingsMatch[0]
-    ? parseInt(ratingsMatch[0], 10)
-    : 0;
+  const ratingCountText = $('.rating-count').text();
+  const ratingCountMatch = ratingCountText.match(/\d[\d\s,.\u00A0\u202F]*/);
+  const totalRatings = (() => {
+    const normalized = ratingCountMatch?.[0]?.replace(/\D/g, '') ?? '';
+    if (normalized === '') return 0;
+    const parsed = parseInt(normalized, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  })();
 
-  // Extract ratings by star. Assumes the page renders bars in descending order
-  // (5★, 4★, 3★, 2★, 1★). We do not verify per-row labels; if Apple changes
-  // to ascending order, the histogram would be silently inverted. Slice to
-  // exactly 5 so starRating = 5 - index is always 1–5 (avoids 0/-1 with wrong
-  // element count).
-  const rawByStar: number[] = $('.vote .total')
-    .map((_, el) => {
-      const n = parseInt($(el).text(), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })
-    .get();
-  const ratingsByStar = rawByStar.slice(0, 5);
+  // Extract per-row vote elements. Each .vote row has a .total with the count.
+  // We try to detect the star rating from labels in the row (aria-label, text
+  // containing a digit like "5 stars") to avoid relying on positional order.
+  const voteRows = $('.vote');
+  const warnings: string[] = [];
 
-  // Build histogram (convert array index to star rating 5,4,3,2,1)
-  const histogram: RatingHistogram = ratingsByStar.reduce<RatingHistogram>(
-    (acc, ratingsForStar, index) => {
-      const starRating = (5 - index) as 1 | 2 | 3 | 4 | 5;
-      acc[starRating] = ratingsForStar;
-      return acc;
-    },
-    { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  );
+  // Attempt label-based extraction: look for a star number in each row's
+  // aria-label or text content (e.g. "5 stars", "5 Stars", aria-label="5").
+  const STAR_LABEL_RE = /\b([1-5])\s*star/i;
+  const STAR_ARIA_RE = /\b([1-5])\b/;
+  const labeledEntries: Array<{ star: number; count: number }> = [];
 
-  // Sanity check: histogram sum should match total when we have a total.
-  // Catches structural changes (e.g. wrong number of .vote .total elements).
-  // Does not detect order flip (5↔1); that would require per-row labels in HTML.
-  if (totalRatings > 0) {
-    const sum = histogram[1] + histogram[2] + histogram[3] + histogram[4] + histogram[5];
-    if (sum !== totalRatings) {
-      console.warn(
-        `Ratings histogram sum (${sum}) does not match total count (${totalRatings}); page structure may have changed`
-      );
+  voteRows.each((_, row) => {
+    const $row = $(row);
+    const countText = $row.find('.total').text();
+    const parsed = parseInt(countText, 10);
+    const count = Number.isNaN(parsed) ? 0 : parsed;
+
+    // Try aria-label on the row or its children, then fall back to text matching
+    const ariaLabel = $row.attr('aria-label') ?? $row.find('[aria-label]').attr('aria-label') ?? '';
+    const textMatch = ariaLabel.match(STAR_LABEL_RE) ?? $row.text().match(STAR_LABEL_RE);
+    const ariaMatch = !textMatch ? ariaLabel.match(STAR_ARIA_RE) : null;
+    const match = textMatch ?? ariaMatch;
+
+    if (match?.[1]) {
+      labeledEntries.push({ star: parseInt(match[1], 10), count });
+    }
+  });
+
+  const histogram: RatingHistogram = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const validStars = new Set([1, 2, 3, 4, 5]);
+
+  // Check if label-based extraction found all 5 unique star ratings
+  const labeledStars = new Set(labeledEntries.map((e) => e.star));
+  const hasAllLabels =
+    validStars.size === labeledStars.size && [...validStars].every((s) => labeledStars.has(s));
+
+  if (hasAllLabels) {
+    // Use label-based mapping (order-independent)
+    for (const entry of labeledEntries) {
+      if (entry.star >= 1 && entry.star <= 5) {
+        histogram[entry.star as 1 | 2 | 3 | 4 | 5] = entry.count;
+      }
+    }
+  } else {
+    // Fall back to positional assumption: descending order (5★, 4★, 3★, 2★, 1★).
+    const rawByStar: number[] = $('.vote .total')
+      .map((_, el) => {
+        const n = parseInt($(el).text(), 10);
+        return Number.isNaN(n) ? 0 : n;
+      })
+      .get();
+    const ratingsByStar = rawByStar.slice(0, 5);
+
+    const STAR_KEYS = [1, 2, 3, 4, 5] as const;
+    for (let index = 0; index < ratingsByStar.length; index++) {
+      const starRating = STAR_KEYS[4 - index];
+      if (starRating !== undefined) {
+        histogram[starRating] = ratingsByStar[index]!;
+      }
     }
   }
 
-  return { ratings: totalRatings, histogram };
+  // Sanity check: histogram sum should match total when we have a total.
+  const histogramSum = histogram[1] + histogram[2] + histogram[3] + histogram[4] + histogram[5];
+  const mismatch = totalRatings > 0 && histogramSum !== totalRatings;
+  if (mismatch) {
+    warnings.push(
+      `Ratings histogram sum (${histogramSum}) does not match total count (${totalRatings}). Data may be inconsistent.`
+    );
+  }
+  return { ratings: totalRatings, histogram, ...(warnings.length > 0 && { warnings }) };
 }

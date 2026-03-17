@@ -1,7 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { Suggestion } from '../types/review.js';
+import type { Suggestion } from '../types/suggest.js';
 import type { SuggestOptions } from '../types/options.js';
 import { doRequest, ensureArray } from './common.js';
+import { ValidationError } from './errors.js';
 import { suggestResponseSchema } from './schemas.js';
 
 const xmlParser = new XMLParser({
@@ -10,9 +11,11 @@ const xmlParser = new XMLParser({
 });
 
 /**
- * Retrieves search term suggestions (autocomplete)
+ * Retrieves search term suggestions (autocomplete).
  * @param options - Options including search term
  * @returns Promise resolving to array of suggestions
+ * @throws {ValidationError} if `term` is missing or empty
+ * @throws {HttpError} on non-OK HTTP response from the Apple hints endpoint
  *
  * @example
  * ```typescript
@@ -24,10 +27,11 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   const { term, requestOptions } = options;
 
   if (term == null || term === '') {
-    throw new Error('term is required');
+    throw new ValidationError('term is required', 'term');
   }
 
-  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?clientApplication=Software&term=${encodeURIComponent(term)}`;
+  const params = new URLSearchParams({ clientApplication: 'Software', term });
+  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?${params}`;
 
   const body = await doRequest(url, requestOptions);
 
@@ -37,8 +41,9 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   const validationResult = suggestResponseSchema.safeParse(parsedData);
 
   if (!validationResult.success) {
-    throw new Error(
-      `Suggest API response validation failed: ${validationResult.error.message}`
+    throw new ValidationError(
+      `Suggest API response validation failed: ${validationResult.error.message}`,
+      'response'
     );
   }
 
@@ -60,5 +65,5 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   const terms = ensureArray(directStrings).filter(
     (s): s is string => typeof s === 'string' && s.length > 0
   );
-  return terms.map((term) => ({ term }));
+  return terms.map((s) => ({ term: s }));
 }

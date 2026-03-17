@@ -1,4 +1,4 @@
-# @perttu/app-store-scraper
+# @davidshq/app-store-scraper
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
@@ -19,7 +19,7 @@ This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https:
 **Requirements:** Node.js ≥20.
 
 ```bash
-npm install @perttu/app-store-scraper
+npm install @davidshq/app-store-scraper
 ```
 
 **Upgrading from v2.x?** v3 is a major release. The main change: `list()` now returns `ListApp[]` by default (one RSS request). To keep the previous behavior (full `App[]`), use `list({ fullDetail: true })`:
@@ -37,7 +37,7 @@ One-line change: add `{ fullDetail: true }` (or merge into your existing options
 ## Usage
 
 ```typescript
-import { app, search, list, reviews, collection, category } from '@perttu/app-store-scraper';
+import { app, search, list, reviews, collection, category } from '@davidshq/app-store-scraper';
 
 // Get app details
 const appData = await app({ id: 553834731 });
@@ -56,7 +56,29 @@ const games = await list({
 const appReviews = await reviews({ id: 553834731, page: 1 });
 ```
 
-**📖 See [examples/all-methods.ts](examples/all-methods.ts) for comprehensive examples of all 11 API methods.**
+**📖 See [examples/all-methods.ts](examples/all-methods.ts) for comprehensive examples of all 12 API methods.**
+
+### Error handling
+
+Methods throw `HttpError` (extends `Error`) on non-OK responses. Use `instanceof HttpError` and `err.status` to branch on specific status codes instead of parsing the message:
+
+```typescript
+import { app, HttpError } from '@davidshq/app-store-scraper';
+
+try {
+  const appData = await app({ id: 123 });
+} catch (err) {
+  if (err instanceof HttpError && err.status === 404) {
+    // App not found
+  }
+  if (err instanceof HttpError && err.status === 200 && err.message === 'No ratings data returned') {
+    // 200 OK but empty body (e.g. ratings endpoint)
+  }
+  throw err;
+}
+```
+
+`HttpError` has `status` (number) and optional `url` (string) for structured handling.
 
 ## API
 
@@ -73,6 +95,9 @@ const appReviews = await reviews({ id: 553834731, page: 1 });
 - `suggest()` - Get search suggestions
 - `privacy()` - Get privacy policy details
 - `versionHistory()` - Get version release history
+- `appPageDetails()` - Fetch the app page once and parse privacy, similar app IDs, and version history in a single request. Returns `{ privacy, similarIds, versionHistory }`.
+
+**Note:** `privacy()`, `versionHistory()`, and `similar()` each fetch the app page HTML separately. If you need more than one of these (e.g. privacy + similar IDs), prefer `appPageDetails()` to avoid multiple requests to the same page. Use `similar()` only when you need full `App[]` for similar apps and don't need privacy or version history. See `docs/DEV-DECISIONS.md` (App page consolidation).
 
 **Note:** `privacy()` and `versionHistory()` scrape Apple’s app page HTML and depend on its DOM structure; they may break if Apple changes the page. See `docs/DEV-DECISIONS.md` for details.
 
@@ -90,6 +115,21 @@ Only supported values are accepted for `country`, `collection`, `category`, `dev
 ### Request options
 
 Most methods accept a `requestOptions` object (see `RequestOptions` in the types). **Supported:** `headers` (custom headers merged with defaults), `timeoutMs` (request timeout in ms; default 15000), `retries` (number of retries for 429/503/network/timeout errors with exponential backoff; default 0 — opt-in; set e.g. 2 to enable). With retries enabled, total wait on repeated timeouts can be up to `timeoutMs * (1 + retries)` plus backoff. Each request is independent: other concurrent calls (e.g. other crawls) are not blocked.
+
+**User-Agent override:** The library sends a default User-Agent (Chrome-based) that may age over time and trigger bot detection. You can override it via `requestOptions.headers`:
+
+```typescript
+const appData = await app({
+  id: 553834731,
+  requestOptions: {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    },
+  },
+});
+```
+
+Custom headers are merged over the defaults, so passing `User-Agent` replaces the built-in value.
 
 ## Development
 
@@ -129,6 +169,7 @@ npm run format
 
 - [BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) – Upgrade guide and breaking changes (e.g. v2 → v3).
 - [DEV-DECISIONS.md](docs/DEV-DECISIONS.md) – Design decisions (APIs vs scraping, DOM-dependent methods, etc.).
+- [EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md](docs/EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md) – Device permissions, rating histogram aria-labels, and MZStore vs public API comparison.
 - [POSTPONED.md](docs/POSTPONED.md) – Deferred enhancements and known limitations.
 - [CHANGELOG.md](CHANGELOG.md) – Release history.
 

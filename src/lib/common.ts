@@ -1,15 +1,27 @@
 import type { App } from '../types/app.js';
-import { DEFAULT_COUNTRY, markets } from '../types/constants.js';
-import {
-  iTunesLookupResponseSchema,
-  type ITunesAppResponse,
-} from './schemas.js';
+import { BODY_PREVIEW_MAX_LEN, DEFAULT_COUNTRY, markets } from '../types/constants.js';
+import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js';
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
-import { HttpError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
 import { validateCountry } from './validate.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 0;
+
+/**
+ * Valid `kind` values for app records returned by the iTunes API.
+ * - `software` — iOS / universal apps
+ * - `mac-software` — Mac App Store apps
+ */
+const APP_KINDS = new Set(['software', 'mac-software']);
+
+/**
+ * Returns true if the iTunes API record represents an app (as opposed to an
+ * artist, audiobook, etc.). Matches on `kind` or `wrapperType`.
+ */
+export function isAppRecord(record: { kind?: string; wrapperType?: string }): boolean {
+  return APP_KINDS.has(record.kind ?? '') || APP_KINDS.has(record.wrapperType ?? '');
+}
 
 /**
  * Builds the App Store app page URL for a given country and numeric app (track) id.
@@ -21,11 +33,51 @@ export function appPageUrl(country: string, appId: number): string {
   return `https://apps.apple.com/${country}/app/id${appId}`;
 }
 
+/**
+ * Fetches the app page HTML; on 404 returns null so callers can return their empty value.
+ * @internal
+ */
+export async function fetchAppPage(
+  url: string,
+  requestOptions?: RequestOptions
+): Promise<string | null> {
+  try {
+    return await doRequest(url, requestOptions);
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 /** Returns true if the failure is transient and worth retrying (GET is idempotent). */
 function isRetryable(status?: number, err?: unknown): boolean {
   if (status === 429 || status === 503) return true;
   if (err instanceof TypeError) return true; // network / DNS / CORS etc.
   return false;
+}
+
+/**
+ * Type guard: true when value is an object with a numeric `status` property (e.g. HttpError-like).
+ * Used in doRequest catch block to read status for retry logic without type assertions.
+ */
+// Stryker disable all: type guard correctness enforced by TypeScript types, not runtime assertions
+function hasStatus(x: unknown): x is { status: number } {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    'status' in x &&
+    typeof (x as { status?: number }).status === 'number'
+  );
+}
+// Stryker restore all
+
+/**
+ * Returns a jittered exponential backoff delay in milliseconds.
+ * Formula: `base * 2^attempt * random(0.5 … 1.0)` — "equal jitter" strategy.
+ * @internal
+ */
+function backoffMs(attempt: number, baseMs = 1000): number {
+  return baseMs * 2 ** attempt * (0.5 + Math.random() * 0.5);
 }
 
 /**
@@ -41,18 +93,26 @@ function isRetryable(status?: number, err?: unknown): boolean {
  *   With retries enabled, total wait on repeated timeouts can be up to `timeoutMs * (1 + retries)` plus backoff.
  * - Each request is independent: other concurrent calls (e.g. other crawls) are not blocked; only the call
  *   that made the request blocks until it completes or times out.
+ * - Default headers (User-Agent, Accept, Accept-Language) are merged with `requestOptions.headers`; custom
+ *   headers override defaults. To avoid bot detection when the default User-Agent ages, pass
+ *   `headers: { 'User-Agent': '...' }` in requestOptions.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
+  // Stryker disable StringLiteral: default header values are not behavioral contracts
   const defaultHeaders: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
   };
+  // Stryker restore StringLiteral
 
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Error(
-      `Invalid timeoutMs: must be a positive number, got ${timeoutMs === 0 ? '0' : String(timeoutMs)}`
+    throw new ValidationError(
+      `Invalid timeoutMs: must be a positive number, got ${timeoutMs === 0 ? '0' : String(timeoutMs)}`,
+      'timeoutMs'
     );
   }
   const rawRetries = options?.retries ?? DEFAULT_RETRIES;
@@ -75,23 +135,23 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
         if (attempt < maxRetries && isRetryable(response.status)) {
           // Consume body so the connection can be reused (fetch spec / connection pooling).
           await response.text().catch(() => '');
-          const delayMs = 1000 * 2 ** attempt;
+          const delayMs = backoffMs(attempt);
           await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
         throw new HttpError(
           `Request to ${url} failed with status ${response.status}`,
           response.status,
-          url,
+          url
         );
       }
 
       return await response.text();
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+      const status = hasStatus(err) ? err.status : undefined;
       if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
-        const delayMs = 1000 * 2 ** attempt;
+        const delayMs = backoffMs(attempt);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
@@ -104,30 +164,81 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
 
 /**
  * Parses a string as JSON and returns the result as unknown.
- * On parse failure, throws a clear error including optional status and a short body preview for debugging.
+ * On parse failure, throws an {@link HttpError} including the response status and a
+ * short body preview for debugging. This ensures consumers catching `HttpError` will
+ * handle malformed responses the same way they handle HTTP failures.
  *
  * @param body - Raw response body string
- * @param context - Optional context (e.g. response status) for error messages
+ * @param context - Optional context (e.g. response status) for error messages; status
+ *   defaults to 200 since callers invoke this after a successful `doRequest`
  * @returns Parsed value as unknown
- * @throws Error with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
+ * @throws HttpError with message like "Invalid JSON response (status 200): Unexpected token... Body preview: ..."
  * @internal
  */
-export function parseJson(
-  body: string,
-  context?: { status?: number }
-): unknown {
+export function parseJson(body: string, context?: { status?: number }): unknown {
   try {
     return JSON.parse(body) as unknown;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const statusPart =
-      context?.status != null ? ` (status ${context.status})` : '';
+    const status = context?.status ?? 200;
     const bodyPreview =
-      body.length > 200 ? `${body.slice(0, 200)}...` : body;
-    throw new Error(
-      `Invalid JSON response${statusPart}: ${msg}. Body preview: ${bodyPreview}`
+      body.length > BODY_PREVIEW_MAX_LEN ? `${body.slice(0, BODY_PREVIEW_MAX_LEN)}...` : body;
+    throw new HttpError(
+      `Invalid JSON response (status ${status}): ${msg}. Body preview: ${bodyPreview}`,
+      status
     );
   }
+}
+
+/**
+ * Schema type for parseAndValidate: must have safeParse returning success/data or error.
+ * @internal
+ */
+type ParseableSchema<T> = {
+  safeParse: (
+    u: unknown
+  ) => { success: true; data: T } | { success: false; error: { message: string } };
+};
+
+/**
+ * Parses JSON, validates with a Zod schema, and throws ValidationError on failure.
+ * Centralizes the parseJson + safeParse + ValidationError pattern used by lookup, reviews, list, and search.
+ *
+ * @param body - Raw response body string
+ * @param schema - Zod schema (or any object with safeParse) to validate parsed data
+ * @param context - Context string for error messages (default: 'API response')
+ * @returns Validated data of type T
+ * @throws {ValidationError} when schema validation fails (field: 'response')
+ * @internal
+ */
+export function parseAndValidate<T>(
+  body: string,
+  schema: ParseableSchema<T>,
+  context = 'API response'
+): T {
+  const parsed = parseJson(body);
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new ValidationError(`${context} validation failed: ${result.error.message}`, 'response');
+  }
+  return result.data;
+}
+
+/**
+ * Parses a value as an integer, returning the fallback when the result would be NaN.
+ * Null and undefined are treated as unparseable and fall through to the fallback.
+ * @param value - Value to parse (string, number, or unknown; null/undefined → fallback)
+ * @param fallback - Value to return when parsing yields NaN (default 0)
+ * @returns Parsed integer or fallback
+ * @internal
+ */
+export function safeParseInt(value: unknown, fallback = 0): number {
+  if (value == null) return fallback;
+  const n = parseInt(
+    typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '',
+    10
+  );
+  return Number.isNaN(n) ? fallback : n;
 }
 
 /**
@@ -143,20 +254,12 @@ export function cleanApp(app: ITunesAppResponse): App {
     description: app.description ?? '',
     icon: app.artworkUrl512 ?? app.artworkUrl100 ?? '',
     genres: app.genres ?? [],
-    genreIds: (app.genreIds ?? [])
-      .map((id) => parseInt(String(id), 10))
-      .filter((n) => !Number.isNaN(n)),
+    genreIds: (app.genreIds ?? []).filter((id) => id !== 0), // Apple genre IDs are 6000+; 0 = invalid/unknown (schema already coerces to number)
     primaryGenre: app.primaryGenreName ?? '',
-    primaryGenreId: (() => {
-      const n = parseInt(String(app.primaryGenreId ?? 0), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })(),
+    primaryGenreId: safeParseInt(app.primaryGenreId),
     contentRating: app.contentAdvisoryRating ?? '',
     languages: app.languageCodesISO2A ?? [],
-    size: (() => {
-      const n = parseInt(String(app.fileSizeBytes ?? 0), 10);
-      return Number.isNaN(n) ? 0 : n;
-    })(),
+    size: safeParseInt(app.fileSizeBytes),
     requiredOsVersion: app.minimumOsVersion ?? '',
     released: app.releaseDate ?? '',
     updated: app.currentVersionReleaseDate ?? '',
@@ -189,6 +292,7 @@ export type LookupId = number | number[] | string | string[];
 /**
  * Looks up apps by ID, bundle ID, or artist ID from iTunes API.
  * Accepts numeric IDs for `id` / `artistId` and string IDs for `bundleId`.
+ * @throws {ValidationError} when the iTunes API response fails schema validation (field: `'response'`)
  */
 export async function lookup(
   ids: LookupId,
@@ -217,23 +321,10 @@ export async function lookup(
   const url = `https://itunes.apple.com/lookup?${params.toString()}`;
   const body = await doRequest(url, requestOptions);
 
-  const parsedData = parseJson(body);
-  const validationResult = iTunesLookupResponseSchema.safeParse(parsedData);
+  const response = parseAndValidate(body, iTunesLookupResponseSchema, 'iTunes API response');
 
-  if (!validationResult.success) {
-    throw new Error(
-      `iTunes API response validation failed: ${validationResult.error.message}`
-    );
-  }
-
-  const response = validationResult.data;
-
-  // Filter to only software and clean the results
-  // The response may include artist records (wrapperType: "artist") and app records
-  // We only want apps, which have kind === 'software' or wrapperType === 'software'
-  return response.results
-    .filter((app) => app.kind === 'software' || app.wrapperType === 'software')
-    .map((app) => cleanApp(app));
+  // Filter to app records only (excludes artist entries, audiobooks, etc.)
+  return response.results.filter((app) => isAppRecord(app)).map((app) => cleanApp(app));
 }
 
 /**
@@ -243,25 +334,43 @@ export async function lookup(
  *
  * @param options - Must include `appId` (bundle ID); optional `country`, `requestOptions`
  * @returns The numeric track ID
- * @throws Error if the app is not found
+ * @throws HttpError (404) if the app is not found
  */
 export async function resolveAppId(options: ResolveAppIdOptions): Promise<number> {
   const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
   validateCountry(country);
   const apps = await lookup(appId, 'bundleId', country, undefined, requestOptions);
   if (apps.length === 0) {
-    throw new Error(`App not found: ${appId}`);
+    throw new HttpError(`App not found: ${appId}`, 404);
   }
   return apps[0]!.id;
 }
 
 /**
- * Gets the Apple Store ID for a given country code.
+ * Wraps an error from resolveAppId into a consistent message and rethrows.
+ * Preserves HttpError status/url when the original error is HttpError.
  * @internal
+ */
+export function wrapResolveAppIdError(appId: string, err: unknown): never {
+  const message = `Could not resolve app id "${appId}": ${err instanceof Error ? err.message : String(err)}`;
+  if (err instanceof HttpError) {
+    throw new HttpError(message, err.status, err.url);
+  }
+  throw new Error(message, { cause: err });
+}
+
+/**
+ * Gets the Apple Store ID for a given country code.
+ * Callers must validate the country code before calling this function.
+ * @internal
+ * @throws {Error} if the country code is not recognized
  */
 export function storeId(country: string): number {
   const id = markets[country.toLowerCase()];
-  return id || markets.us || 143441;
+  if (id === undefined) {
+    throw new Error(`Unknown country code: ${country}`);
+  }
+  return id;
 }
 
 /**
@@ -274,15 +383,20 @@ export function ensureArray<T>(value: T | T[] | undefined | null): T[] {
 
 /**
  * Validates that at least one of the required fields is present.
+ * @param options - Options object (typed generically so callers need not cast).
+ * @param fields - Field names to check; at least one must be present (non-null/undefined).
+ * @param errorMessage - Message for the thrown ValidationError when validation fails.
+ * @throws {ValidationError} with field names joined by "/" (e.g. "id/appId")
  * @internal
  */
-export function validateRequiredField(
-  options: Record<string, unknown>,
-  fields: string[],
+export function validateRequiredField<T extends object>(
+  options: T,
+  fields: (keyof T & string)[],
   errorMessage: string
 ): void {
-  const hasField = fields.some((field) => options[field] != null);
+  const opts = options as Record<string, unknown>;
+  const hasField = fields.some((field) => opts[field] != null);
   if (!hasField) {
-    throw new Error(errorMessage);
+    throw new ValidationError(errorMessage, fields.join('/'));
   }
 }
