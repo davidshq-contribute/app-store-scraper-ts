@@ -14,7 +14,12 @@
  * }
  */
 export class HttpError extends Error {
-  /** HTTP status code (e.g. 404, 500). Reflects the actual response status. */
+  /**
+   * HTTP status code (e.g. 404, 500). Usually reflects the actual response
+   * status, but may represent a logical status when the HTTP request itself
+   * succeeded (e.g. 404 for "app not found" when the API returned 200 with
+   * zero results).
+   */
   readonly status: number;
   /** Request URL (if available). */
   readonly url?: string;

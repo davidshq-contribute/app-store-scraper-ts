@@ -31,7 +31,7 @@ export async function suggest(options: SuggestOptions): Promise<Suggestion[]> {
   }
 
   const params = new URLSearchParams({ clientApplication: 'Software', term });
-  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?${params}`;
+  const url = `https://search.itunes.apple.com/WebObjects/MZSearchHints.woa/wa/hints?${params.toString()}`;
 
   const body = await doRequest(url, requestOptions);
 
