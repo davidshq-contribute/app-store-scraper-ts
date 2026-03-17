@@ -2,7 +2,7 @@
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
-This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies.
+This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies. It is a fork of the [TS rewrite by Perttu](https://github.com/plahteenlahti/app-store-scraper).
 
 ## Features
 
@@ -18,8 +18,10 @@ This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https:
 
 **Requirements:** Node.js ≥20.
 
+This package is not published to npm. Install from GitHub:
+
 ```bash
-npm install @davidshq/app-store-scraper
+npm install github:davidshq-contribute/app-store-scraper-ts
 ```
 
 **Upgrading from v2.x?** v3 is a major release. The main change: `list()` now returns `ListApp[]` by default (one RSS request). To keep the previous behavior (full `App[]`), use `list({ fullDetail: true })`:
