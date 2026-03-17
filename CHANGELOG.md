@@ -9,30 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **DRY (Option B):** Add `wrapResolveAppIdError(appId, err)` in `common.ts` to centralize the resolveAppId catch block. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, `reviews.ts`, and `app-page-details.ts`.
-- **DRY (fetchAppPage):** Add `fetchAppPage(url, requestOptions)` in `common.ts`; on 404 returns `null` so callers return their empty value. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, and `app-page-details.ts`.
+- **DRY:** Add `wrapResolveAppIdError(appId, err)` in `common.ts` to centralize the resolveAppId catch block. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, `reviews.ts`, and `app-page-details.ts`.
+- **DRY:** Add `fetchAppPage(url, requestOptions)` in `common.ts`; on 404 returns `null` so callers return their empty value. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, and `app-page-details.ts`.
 - **doRequest retry consistency:** Use `backoffMs(attempt)` in the catch block so both retry paths (HTTP errors and network errors) use the same jittered backoff.
-- **DRY (parseAndValidate):** Add `parseAndValidate(body, schema, context)` in `common.ts` to centralize parseJson + Zod safeParse + ValidationError. Use in `lookup`, `reviews`, `list`, and `search`.
-- **validateRequiredField (CODE_SMELLS §2):** `validateRequiredField` in `src/lib/common.ts` now accepts a generic `<T extends object>` so callers can pass typed options without casting. Removed `options as Record<string, unknown>` from `app.ts`, `reviews.ts`, and `similar.ts`. List/suggest (CODE_SMELLS §1) already throw `ValidationError` with `field: 'response'` for API response validation.
-- **storeId fallback (CODE_SMELLS §4):** In `src/lib/common.ts`, `storeId()` now uses only `DEFAULT_STORE_FRONT_ID` as fallback when the country is unknown (removed redundant `markets.us` from the chain). The constant remains documented in `src/types/constants.ts` as the US store front.
-- **Type safety (CODE_SMELLS §3):** In `doRequest` catch block, use a `hasStatus` type guard instead of `(err as { status?: number }).status` for retry logic. In `parseRatings`, derive histogram star key via `STAR_KEYS[4 - index] ?? 1` instead of a type assertion.
-- **Constants:** Add `ITUNES_API_MAX_LIMIT` (200) and `BODY_PREVIEW_MAX_LEN` (200) in `src/types/constants.ts`; use in `search.ts`, `list.ts`, `validate.ts`, and `common.ts` to remove duplicate magic numbers (per docs/CODE_SMELLS.md §8).
+- **DRY:** Add `parseAndValidate(body, schema, context)` in `common.ts` to centralize parseJson + Zod safeParse + ValidationError. Use in `lookup`, `reviews`, `list`, and `search`.
+- **validateRequiredField:** `validateRequiredField` in `src/lib/common.ts` now accepts a generic `<T extends object>` so callers can pass typed options without casting. Removed `options as Record<string, unknown>` from `app.ts`, `reviews.ts`, and `similar.ts`. List/suggest (CODE_SMELLS §1) already throw `ValidationError` with `field: 'response'` for API response validation.
+- **storeId fallback:** In `src/lib/common.ts`, `storeId()` now uses only `DEFAULT_STORE_FRONT_ID` as fallback when the country is unknown (removed redundant `markets.us` from the chain). The constant remains documented in `src/types/constants.ts` as the US store front.
+- **Type safety:** In `doRequest` catch block, use a `hasStatus` type guard instead of `(err as { status?: number }).status` for retry logic. In `parseRatings`, derive histogram star key via `STAR_KEYS[4 - index] ?? 1` instead of a type assertion.
+- **Constants:** Add `ITUNES_API_MAX_LIMIT` (200) and `BODY_PREVIEW_MAX_LEN` (200) in `src/types/constants.ts`; use in `search.ts`, `list.ts`, `validate.ts`, and `common.ts` to remove duplicate magic numbers.
 
-- **ratings() empty body:** When the response is 200 OK but body is empty, now throws `HttpError` with `status: 200` (actual response) and message `RATINGS_EMPTY_MESSAGE` instead of synthetic 204, so HTTP semantics are not conflated with application-level "no data." Export `RATINGS_EMPTY_MESSAGE` for consumer checks; `app()` treats 404 or 200 + this message as "ratings unavailable" (per CODE-REVIEW-FIXES-3 §8).
-- **API response validation:** `lookup()` (common.ts), `reviews()`, and `search()` now throw `ValidationError` with `field: 'response'` when API response schema validation fails, so consumers can distinguish bad API responses from other errors (per CODE-REVIEW-FIXES-3 §4).
+- **ratings() empty body:** When the response is 200 OK but body is empty, now throws `HttpError` with `status: 200` (actual response) and message `RATINGS_EMPTY_MESSAGE` instead of synthetic 204, so HTTP semantics are not conflated with application-level "no data." Export `RATINGS_EMPTY_MESSAGE` for consumer checks; `app()` treats 404 or 200 + this message as "ratings unavailable".
+- **API response validation:** `lookup()` (common.ts), `reviews()`, and `search()` now throw `ValidationError` with `field: 'response'` when API response schema validation fails, so consumers can distinguish bad API responses from other errors.
 - **Tests:** `suggest.test.ts` and `ratings.test.ts` now assert `ValidationError` type (and, for ratings, a test for missing `id`) so validation errors are checked by type, not only message (per CODE-REVIEW-FIXES-3 §5).
-- **package.json:** Remove redundant `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser`; `typescript-eslint` bundles both for flat config (per CODE-REVIEW-FIXES-3).
-- **similar.ts:** Use `appId != null` instead of truthiness check so empty string triggers resolution and fails fast, consistent with `reviews.ts` (per CODE-REVIEW-FIXES-3).
-- **list.test.ts:** Add tests for empty feed handling (`feed.entry` undefined/empty), URL construction (collection, category, country, limit), link parsing (single object, no alternate), developerId 0 when no href, genreId 0 when category im:id missing (per MUTATION_TESTING_RECOMMENDATIONS.md 2.4).
-- **app.test.ts:** Add fixture-based tests for screenshot scraping fallback (empty API → scrape HTML), 404/500 handling in scrape, ratings histogram merge, ratings 404/204 soft-fail, bundleId vs id lookup path (per MUTATION_TESTING_RECOMMENDATIONS.md 2.5).
-- **screenshots.test.ts:** Add `extractScreenshotUrl` tests for regex $ anchor (duplicate size pattern in path) and trailing content after extension (per MUTATION_TESTING_RECOMMENDATIONS.md 2.5).
-- **search.test.ts:** Add unit tests for `idsOnly` mode (returns `number[]`, filters undefined trackIds), `cleanApp` result transformation (raw iTunes fields → App shape), and explicit entity URL param assertions for iPad/Mac device mapping (per MUTATION_TESTING_RECOMMENDATIONS.md 3.2).
-- **reviews.test.ts:** Add tests for sort option/default (URL contains `sortby=mostRecent` or `sortby=mostHelpful`), `appId` resolution path via `resolveAppId`, optional chaining when feed fields are missing, and `ValidationError.field` assertions (per MUTATION_TESTING_RECOMMENDATIONS.md 2.2).
-- **common.test.ts:** Add tests for `appPageUrl` URL format, `doRequest` User-Agent header, response body verbatim, 503/429 retries, non-retryable 404 throws immediately, `lookup` URL construction (bundleId/id/artistId params, entity=software), comprehensive `cleanApp` field mapping via lookup, and optional chaining for missing API fields (per MUTATION_TESTING_RECOMMENDATIONS.md 2.3).
-- **similar.test.ts:** Add tests for 404/500 HttpError handling, `appId`→`id` resolution via `resolveAppId`, `includeLinkType` branching (plain `App[]` vs `SimilarApp[]`), deduplication of duplicate app IDs, and empty-entries early return (per MUTATION_TESTING_RECOMMENDATIONS.md 2.1).
-- **common.test.ts:** Add explicit value assertions for `safeParseInt`, `storeId`, and `ensureArray` so tests kill mutations (per MUTATION_TESTING_RECOMMENDATIONS.md 1.3 — covered 0 tests).
-- **errors.test.ts:** Add assertions that `HttpError` has no `field` property and that `ValidationError` is distinct from `HttpError` (improves mutation score per 1.1).
-- **validate.test.ts:** Assert `ValidationError.field` for all validators (`validateCollection`, `validateCategory`, `validateDevice`, `validateSort`, `validateReviewsPage`, `validateListNum`, `validateSearchPagination`) to kill StringLiteral mutants on the field parameter (per MUTATION_TESTING_RECOMMENDATIONS.md 1.2).
+- **package.json:** Remove redundant `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser`; `typescript-eslint` bundles both for flat config.
+- **similar.ts:** Use `appId != null` instead of truthiness check so empty string triggers resolution and fails fast, consistent with `reviews.ts`.
+- **list.test.ts:** Add tests for empty feed handling (`feed.entry` undefined/empty), URL construction (collection, category, country, limit), link parsing (single object, no alternate), developerId 0 when no href, genreId 0 when category im:id missing.
+- **app.test.ts:** Add fixture-based tests for screenshot scraping fallback (empty API → scrape HTML), 404/500 handling in scrape, ratings histogram merge, ratings 404/204 soft-fail, bundleId vs id lookup path.
+- **screenshots.test.ts:** Add `extractScreenshotUrl` tests for regex $ anchor (duplicate size pattern in path) and trailing content after extension.
+- **search.test.ts:** Add unit tests for `idsOnly` mode (returns `number[]`, filters undefined trackIds), `cleanApp` result transformation (raw iTunes fields → App shape), and explicit entity URL param assertions for iPad/Mac device mapping.
+- **reviews.test.ts:** Add tests for sort option/default (URL contains `sortby=mostRecent` or `sortby=mostHelpful`), `appId` resolution path via `resolveAppId`, optional chaining when feed fields are missing, and `ValidationError.field` assertions.
+- **common.test.ts:** Add tests for `appPageUrl` URL format, `doRequest` User-Agent header, response body verbatim, 503/429 retries, non-retryable 404 throws immediately, `lookup` URL construction (bundleId/id/artistId params, entity=software), comprehensive `cleanApp` field mapping via lookup, and optional chaining for missing API fields.
+- **similar.test.ts:** Add tests for 404/500 HttpError handling, `appId`→`id` resolution via `resolveAppId`, `includeLinkType` branching (plain `App[]` vs `SimilarApp[]`), deduplication of duplicate app IDs, and empty-entries early return.
+- **common.test.ts:** Add explicit value assertions for `safeParseInt`, `storeId`, and `ensureArray` so tests kill mutations.
+- **errors.test.ts:** Add assertions that `HttpError` has no `field` property and that `ValidationError` is distinct from `HttpError`.
+- **validate.test.ts:** Assert `ValidationError.field` for all validators (`validateCollection`, `validateCategory`, `validateDevice`, `validateSort`, `validateReviewsPage`, `validateListNum`, `validateSearchPagination`) to kill StringLiteral mutants on the field parameter.
 - **eslint.config.js:** Upgrade `@typescript-eslint/no-explicit-any` from `warn` to `error` (no `any` usages in `src/`).
 - **vitest.config.ts:** Add `resolve.tsconfigPaths: true` so Vitest uses project tsconfig for path resolution (aligns with build).
 
@@ -41,10 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`RATINGS_EMPTY_MESSAGE` removed:** The exported `RATINGS_EMPTY_MESSAGE` constant and the `error.message === RATINGS_EMPTY_MESSAGE` matching pattern have been replaced by a dedicated `RatingsEmptyError` class (extends `HttpError`). Consumers should migrate from `error.message === RATINGS_EMPTY_MESSAGE` to `error instanceof RatingsEmptyError`. The new class is exported from the package root.
 - **`PrivacyDetails` interface:** Removed `managePrivacyChoicesUrl` and `privacyPolicyText` fields — these were never populated by any parser and always returned `undefined`.
 
-### Documentation
-
-- **docs/PRAGMATIC_ENGINEERING_REVIEW.md:** Pragmatic engineering review covering strengths, improvement areas, prioritized recommendations, and YAGNI items.
-- **README, RequestOptions:** Document User-Agent override via `requestOptions.headers` for bot-detection avoidance when the default ages.
 
 ## [3.0.0] - 2026-03-12
 

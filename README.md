@@ -153,7 +153,7 @@ npm run test:watch
 npm run test:coverage
 
 # Run integration tests (live API; skipped by default)
-RUN_INTEGRATION_TESTS=1 npm run test
+npm run test:integration
 
 # Type check
 npm run typecheck
@@ -170,6 +170,7 @@ npm run format
 - [BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) – Upgrade guide and breaking changes (e.g. v2 → v3).
 - [DEV-DECISIONS.md](docs/DEV-DECISIONS.md) – Design decisions (APIs vs scraping, DOM-dependent methods, etc.).
 - [EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md](docs/EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md) – Device permissions, rating histogram aria-labels, and MZStore vs public API comparison.
+- [mutation-testing-analysis.md](docs/mutation-testing-analysis.md) – Mutation testing analysis and recommendations.
 - [POSTPONED.md](docs/POSTPONED.md) – Deferred enhancements and known limitations.
 - [CHANGELOG.md](CHANGELOG.md) – Release history.
 

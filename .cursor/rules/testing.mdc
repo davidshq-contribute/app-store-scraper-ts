@@ -1,0 +1,25 @@
+---
+description: Test style and coverage expectations
+globs: "**/__tests__/**/*.ts,**/*.test.ts"
+alwaysApply: false
+---
+
+# Testing (Vitest)
+
+- **Structure**: Use `describe` for the unit (e.g. module or function) and `it` for each behavior. One logical assertion per `it` when practical.
+- **Naming**: `it('should …')` for behavior (e.g. `it('should return empty array for null', ...)`).
+- **Edge cases**: Cover null, undefined, empty input, and invalid/NaN numeric input where the implementation has special handling (e.g. `validateRequiredField` with null, `ensureArray` with null, parsed IDs that can be NaN).
+- **Imports**: Use `../lib/…` (or similar) with `.js` extension for ESM; import from the implementation, not from a barrel that might hide missing exports.
+- **Assertions**: Use `expect(...).toEqual(...)` for value comparison, `expect(() => fn()).toThrow(...)` for thrown errors, `.not.toThrow()` when the call must succeed.
+
+## Tests and code
+
+- **Tests confirm what code does** — we don't rewrite code solely to pass tests. If a test fails, first determine whether the test is wrong or the behavior is wrong.
+- **If a test fails and there is a legitimate code issue**, update the code (fix the bug or behavior), not the test.
+- **Prefer root-cause fixes over patching symptoms** when the change isn't too large. If it's unclear whether to fix the root cause or apply a smaller patch, ask on a per-case basis.
+
+## Coverage and scope
+
+- **No mandatory 100% coverage**; focus on critical paths (validation, parsing, error handling) and CODE-REVIEW bug areas.
+- **No E2E framework** beyond current Vitest + live API calls; no Playwright/Cypress unless we add a browser-based flow later.
+- **No snapshot tests** for API responses; responses change over time and would cause noisy diffs. Fixture-based schema and parsing tests are enough.
