@@ -241,9 +241,16 @@ describe('search', () => {
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
+    let realDoRequest: typeof common.doRequest;
+
     beforeAll(async () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
-      vi.mocked(common.doRequest).mockImplementation(actual.doRequest);
+      realDoRequest = actual.doRequest;
+    });
+
+    beforeEach(() => {
+      // Re-apply after the outer beforeEach's mockReset clears it
+      vi.mocked(common.doRequest).mockImplementation(realDoRequest);
     });
 
     it('should search for apps with a valid term', { timeout: 10000 }, async () => {

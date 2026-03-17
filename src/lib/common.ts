@@ -181,8 +181,11 @@ export function parseJson(body: string, context?: { status?: number }): unknown 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const status = context?.status ?? 200;
+    const safeBody = body ?? '';
     const bodyPreview =
-      body.length > BODY_PREVIEW_MAX_LEN ? `${body.slice(0, BODY_PREVIEW_MAX_LEN)}...` : body;
+      safeBody.length > BODY_PREVIEW_MAX_LEN
+        ? `${safeBody.slice(0, BODY_PREVIEW_MAX_LEN)}...`
+        : safeBody;
     throw new HttpError(
       `Invalid JSON response (status ${status}): ${msg}. Body preview: ${bodyPreview}`,
       status

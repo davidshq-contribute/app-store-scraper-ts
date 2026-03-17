@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import * as common from '../lib/common.js';
 import { app } from '../lib/app.js';
 import { HttpError, RatingsEmptyError } from '../lib/errors.js';
@@ -201,6 +201,21 @@ describe('app', () => {
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
+    let realDoRequest: typeof common.doRequest;
+    let realLookup: typeof common.lookup;
+
+    beforeAll(async () => {
+      const actual = await vi.importActual<typeof common>('../lib/common.js');
+      realDoRequest = actual.doRequest;
+      realLookup = actual.lookup;
+    });
+
+    beforeEach(() => {
+      // Re-apply after the outer beforeEach's mockReset clears doRequest
+      vi.mocked(common.doRequest).mockImplementation(realDoRequest);
+      vi.mocked(common.lookup).mockImplementation(realLookup);
+    });
+
     it('should fetch app by numeric ID', { timeout: 10000 }, async () => {
       // Minecraft app ID
       const result = await app({ id: 479516143 });

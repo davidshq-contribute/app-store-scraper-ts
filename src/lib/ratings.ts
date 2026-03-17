@@ -121,6 +121,12 @@ export function parseRatings(html: string): Ratings {
       .get();
     const ratingsByStar = rawByStar.slice(0, 5);
 
+    if (ratingsByStar.length !== 5) {
+      warnings.push(
+        `Expected 5 star rating rows but found ${ratingsByStar.length}. Histogram may be inaccurate (positional fallback assumes exactly 5 rows in descending order).`
+      );
+    }
+
     const STAR_KEYS = [1, 2, 3, 4, 5] as const;
     for (let index = 0; index < ratingsByStar.length; index++) {
       const starRating = STAR_KEYS[4 - index];
