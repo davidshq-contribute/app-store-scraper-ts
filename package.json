@@ -72,7 +72,7 @@
   "devDependencies": {
     "@stryker-mutator/core": "^9.6.0",
     "@stryker-mutator/vitest-runner": "^9.6.0",
-    "@types/node": "^20.10.0",
+    "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
@@ -80,12 +80,12 @@
     "tsup": "^8.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.3.2",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.57.1",
     "vitest": "^4.1.0"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
-    "fast-xml-parser": "^5.5.3",
+    "fast-xml-parser": "^5.5.6",
     "zod": "^4.1.12"
   },
   "engines": {
