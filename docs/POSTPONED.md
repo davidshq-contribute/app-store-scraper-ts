@@ -6,14 +6,6 @@ Enhancements we’ve decided to defer. They may be revisited when we need parity
 
 ## Postponed Bugs
 
-### ~~B1: `reviews()` `slice(1)` drops first entry~~ **FIXED**
-
-**Context:** `reviews()` used `slice(1)` which dropped the first entry. Single-review feeds returned empty.
-
-**Fix:** Replaced `slice(1)` with `entries.filter((entry) => entry.author != null)` to distinguish metadata entries (no `author`) from real reviews. Tests added for single-review, metadata-only, and empty feed cases.
-
----
-
 ## Suggest: store front and country
 
 **Context:** The JS package sends `X-Apple-Store-Front: ${storeId},29` (and can use country) for the suggest endpoint; we do not send store-specific headers for `suggest()`.
