@@ -2,7 +2,7 @@
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
-This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies.
+This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies. It is a fork of the [TS rewrite by Perttu](https://github.com/plahteenlahti/app-store-scraper).
 
 ## Features
 
@@ -18,8 +18,10 @@ This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https:
 
 **Requirements:** Node.js ≥20.
 
+This package is not published to npm. Install from GitHub:
+
 ```bash
-npm install @davidshq/app-store-scraper
+npm install github:davidshq-contribute/app-store-scraper-ts
 ```
 
 **Upgrading from v2.x?** v3 is a major release. The main change: `list()` now returns `ListApp[]` by default (one RSS request). To keep the previous behavior (full `App[]`), use `list({ fullDetail: true })`:
@@ -153,7 +155,7 @@ npm run test:watch
 npm run test:coverage
 
 # Run integration tests (live API; skipped by default)
-RUN_INTEGRATION_TESTS=1 npm run test
+npm run test:integration
 
 # Type check
 npm run typecheck
@@ -170,6 +172,7 @@ npm run format
 - [BREAKING-CHANGES.md](docs/BREAKING-CHANGES.md) – Upgrade guide and breaking changes (e.g. v2 → v3).
 - [DEV-DECISIONS.md](docs/DEV-DECISIONS.md) – Design decisions (APIs vs scraping, DOM-dependent methods, etc.).
 - [EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md](docs/EVALUATION_DEVICE_PERMISSIONS_AND_APIS.md) – Device permissions, rating histogram aria-labels, and MZStore vs public API comparison.
+- [mutation-testing-analysis.md](docs/mutation-testing-analysis.md) – Mutation testing analysis and recommendations.
 - [POSTPONED.md](docs/POSTPONED.md) – Deferred enhancements and known limitations.
 - [CHANGELOG.md](CHANGELOG.md) – Release history.
 

@@ -1,3 +1,4 @@
+/** Barrel re-exports for all public types and constants. */
 export type { App, ListApp, RatingHistogram, Ratings, SimilarApp, SimilarLinkType } from './app.js';
 export type { Review } from './review.js';
 export type { Suggestion } from './suggest.js';

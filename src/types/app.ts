@@ -151,7 +151,7 @@ export interface Ratings {
 
 /**
  * Section label for similar/related app links on an App Store app page.
- * Typical values: "customers-also-bought", "more-by-developer", "you-might-also-like", "other".
+ * Typical values: "customers-also-bought", "more-by-developer", "you-might-also-like", "similar-apps", "other".
  */
 export type SimilarLinkType =
   | 'customers-also-bought'

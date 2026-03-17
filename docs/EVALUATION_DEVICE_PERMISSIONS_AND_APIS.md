@@ -47,74 +47,6 @@ Privacy labels include **data categories** such as Location, User Content, Conta
 
 ---
 
-## 2. Rating Histogram: Using aria-labels
-
-### Current Behavior
-
-The `ratings()` parser in `src/lib/ratings.ts` assumes `.vote .total` elements are in **descending order** (5★, 4★, 3★, 2★, 1★). It maps `index` to `starRating = 5 - index`. If Apple reverses the order, the histogram would silently invert.
-
-### Labels Are Available
-
-The iTunes customer-reviews page (`itunes.apple.com/{country}/customer-reviews/id{id}?displayable-kind=11`) includes `aria-label` on each `.vote` div:
-
-```html
-<div class="vote" role="text" aria-label='5 stars, 634,418 ratings'>
-  ...
-  <span class="total">634418</span>
-</div>
-<div class="vote" role="text" aria-label='4 stars, 62,837 ratings'>
-  ...
-</div>
-...
-<div class="vote" role="text" aria-label='1 star, 56,606 ratings'>
-  ...
-</div>
-```
-
-Format: `aria-label='N stars, X ratings'` (or `'1 star, X ratings'` for single star).
-
-### Changes Required
-
-1. **Parse `aria-label`** — For each `.vote` element, read `$(el).attr('aria-label')` and extract the star count via regex: `/(\d+)\s+stars?/` (handles both "5 stars" and "1 star").
-
-2. **Map count to star rating** — Use the parsed star value (1–5) as the histogram key instead of `5 - index`.
-
-3. **Fallback** — If `aria-label` is missing or unparseable, fall back to the current index-based logic and add a `warnings` entry so consumers are aware.
-
-4. **Unit tests** — Add fixtures with `aria-label` present and with `aria-label` absent to ensure both paths work.
-
-### Example Implementation Sketch
-
-```typescript
-// In parseRatings(), replace the index-based mapping with:
-$('.vote').each((_, el) => {
-  const $el = $(el);
-  const totalEl = $el.find('.total');
-  if (totalEl.length === 0) return;
-  const count = parseInt(totalEl.text(), 10);
-  if (Number.isNaN(count)) return;
-
-  const ariaLabel = $el.attr('aria-label') ?? '';
-  const starMatch = ariaLabel.match(/(\d+)\s+stars?/i);
-  const starRating = starMatch ? parseInt(starMatch[1], 10) : null;
-
-  if (starRating >= 1 && starRating <= 5) {
-    histogram[starRating as 1 | 2 | 3 | 4 | 5] = count;
-  } else {
-    // Fallback: assume order 5→1 by index
-    // ... existing logic with warning
-  }
-});
-```
-
-### Files to Update
-
-- `src/lib/ratings.ts` — `parseRatings()` function
-- `src/__tests__/ratings.test.ts` — Add fixtures with `aria-label`, test fallback when missing
-- `docs/POSTPONED.md` — Remove or resolve item 1.2 (Ratings Histogram Order Assumption)
-
----
-
 ## 3. MZStore vs Public iTunes API
 
 ### Overview
@@ -161,9 +93,40 @@ $('.vote').each((_, el) => {
 | Messages extension | No | Yes |
 | Preorder status | No | Yes |
 
-**Bundle ID** is the unique reverse-DNS identifier (e.g. `com.company.appname`) that identifies an app across Apple's ecosystem; it differs from the numeric App ID used in URLs.
+### Content rating: iTunes vs MZStore
 
-**Messages extension** indicates whether the app extends the iMessage app (e.g. sticker packs, in-conversation apps, interactive content).
+| Source | Field | What you get |
+|--------|--------|----------------|
+| **Public iTunes** (Lookup only; Search does not return rating) | `contentAdvisoryRating` | A **single string** for the storefront (e.g. `"4+"`, `"12+"`, `"17+"`). One value per app; no breakdown by region or rating system. |
+| **MZStore** | `contentRatingsBySystem` | **Per-system ratings**: e.g. US (ESRB-style), EU (PEGI), etc. Useful when you need region-specific or multi-system labels (e.g. "4+" in one region, "12+" in another) without multiple lookups. |
+
+So: iTunes gives one advisory string per app from lookup; MZStore can give a map of rating system → value in the same search response.
+
+### Device families: what they are and where we get them
+
+**Device families** are the **platforms the app supports**: iPhone, iPad, Apple TV, etc. (Sometimes represented as numeric family IDs in internal APIs, e.g. 1 = iPhone, 2 = iPad.)
+
+- **Public iTunes**  
+  - **Search:** Does **not** return device families.  
+  - **Lookup:** Returns `supportedDevices` — an array of device name strings (e.g. `["iPhone", "iPad"]`). The same app also returns screenshot URLs **already grouped by device type**: `screenshotUrls` (iPhone/iPod), `ipadScreenshotUrls`, `appletvScreenshotUrls`. So we do get “devices” from public iTunes via **lookup**: a flat list of supported device names plus screenshots batched by iPhone / iPad / Apple TV.  
+- **MZStore**  
+  - **Search:** Returns `deviceFamilies` in the search response, so you get supported device types without a per-app lookup.
+
+So the difference is not “iTunes shows all devices vs MZStore batches by iPad/iOS” — both can express the same idea (iPhone, iPad, Apple TV). The difference is **where**: iTunes only exposes it on **lookup**; MZStore exposes it in **search**, so you avoid N extra lookups for N results.
+
+### Screenshots: request and time impact
+
+- **Public iTunes:** Search returns **no** screenshots. To get screenshots you must call **lookup** (or `app()`) per app. So for **N** search results, getting screenshots = **1 search + N lookups** (N+1 HTTP requests).
+- **MZStore:** Search response includes `screenshotsByType` per result. One search request can give you screenshots for all results in that response.
+
+**Time impact:** Using MZStore for search when you need screenshots **removes N round-trips** (one per app). For 100 apps that’s 100 fewer requests; for 200 apps, 200 fewer. Exact time saved depends on latency and rate limiting; the main gain is fewer requests and less risk of rate limits rather than a fixed “X seconds faster” number.
+
+### Glossary: editorial video, messages extension
+
+- **Editorial video** — A **promotional or “hero” video** shown on the app’s store page (often at the top). It can be chosen by Apple as “editorial” content or provided by the developer. MZStore exposes metadata for it (`editorialVideo`); public iTunes does not.
+- **Messages extension** — Indicates the app **extends iMessage**: e.g. sticker packs, in-conversation mini-apps, or other content that appears inside the Messages app. MZStore exposes this flag; public iTunes does not.
+
+**Bundle ID** is the unique reverse-DNS identifier (e.g. `com.company.appname`) that identifies an app across Apple's ecosystem; it differs from the numeric App ID used in URLs.
 
 ### Response Structure
 

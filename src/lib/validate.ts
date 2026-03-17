@@ -1,3 +1,10 @@
+/**
+ * Input validation helpers for caller-provided options.
+ *
+ * Each validator checks a single field against an allowlist or range and throws
+ * {@link ValidationError} on failure. Called early in every public API function
+ * so invalid values never reach URL construction or HTTP requests.
+ */
 import {
   collection,
   category,
