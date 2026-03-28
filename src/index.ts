@@ -31,7 +31,7 @@
  */
 
 // Export all API methods
-export { app } from './lib/app.js';
+export { app, scrapeScreenshots } from './lib/app.js';
 export { resolveAppId } from './lib/common.js';
 export { list } from './lib/list.js';
 export { search } from './lib/search.js';

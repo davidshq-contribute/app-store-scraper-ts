@@ -105,8 +105,8 @@ export function parseScreenshotsFromHtml(html: string): {
 /**
  * Scrapes screenshots from the App Store page when the API doesn't return them
  */
-async function scrapeScreenshots(
-  appId: number,
+export async function scrapeScreenshots(
+  appId: number | string,
   country: string,
   requestOptions?: AppOptions['requestOptions']
 ): Promise<{ screenshots: string[]; ipadScreenshots: string[]; appletvScreenshots: string[] }> {

@@ -29,7 +29,7 @@ export function isAppRecord(record: { kind?: string; wrapperType?: string }): bo
  * Used by app (screenshots), similar, privacy, and versionHistory.
  * @internal
  */
-export function appPageUrl(country: string, appId: number): string {
+export function appPageUrl(country: string, appId: number | string): string {
   return `https://apps.apple.com/${country}/app/id${appId}`;
 }
 
