@@ -168,6 +168,20 @@ describe('app', () => {
       const result = await app({ id: 12345, country: DEFAULT_COUNTRY, ratings: true });
 
       expect(result.histogram).toEqual({ 1: 5, 2: 10, 3: 20, 4: 30, 5: 35 });
+      expect(result.ratingHistogramWarnings).toBeUndefined();
+    });
+
+    it('merges ratingHistogramWarnings when ratings() returns warnings', async () => {
+      vi.mocked(common.lookup).mockResolvedValueOnce([baseApp]);
+      vi.mocked(ratings).mockResolvedValueOnce({
+        ratings: 100,
+        histogram: { 1: 5, 2: 10, 3: 20, 4: 30, 5: 35 },
+        warnings: ['histogram sum 99 does not match total 100'],
+      });
+
+      const result = await app({ id: 12345, country: DEFAULT_COUNTRY, ratings: true });
+
+      expect(result.ratingHistogramWarnings).toEqual(['histogram sum 99 does not match total 100']);
     });
 
     it('continues without histogram when ratings returns 404', async () => {

@@ -198,7 +198,11 @@ export async function app(options: AppOptions): Promise<App> {
   if (includeRatings) {
     try {
       const ratingsData = await ratings({ id: appData.id, country, requestOptions });
-      result = { ...result, histogram: ratingsData.histogram };
+      result = {
+        ...result,
+        histogram: ratingsData.histogram,
+        ...(ratingsData.warnings?.length ? { ratingHistogramWarnings: ratingsData.warnings } : {}),
+      };
     } catch (error) {
       // Swallow "no ratings available" cases; propagate everything else.
       const isNotFound = error instanceof HttpError && error.status === 404;

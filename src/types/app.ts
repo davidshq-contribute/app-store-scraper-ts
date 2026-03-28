@@ -116,6 +116,11 @@ export interface App {
   supportedDevices: string[];
   /** Rating histogram (only if ratings option is true) */
   histogram?: RatingHistogram;
+  /**
+   * Diagnostic strings from the ratings scrape when the histogram sum does not match
+   * the reported total (page structure drift). Only set when `ratings: true` was used.
+   */
+  ratingHistogramWarnings?: string[];
 }
 
 /**
