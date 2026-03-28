@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ratingHistogramWarnings` on `app({ ratings: true })`** — When ratings/histogram data is fetched, the result can include warnings if per-star histogram counts disagree with aggregate rating totals. Lets consumers (e.g. mac-store-crawler) log or quarantine without guessing from raw numbers.
+
+- **`scrapeScreenshots` export** — Public entry point for HTML-only screenshot fetching when callers need screenshots without the full `app()` flow (used by crawler image-queue fallback).
+
 ### Changed
+
+- **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues).
 
 - **DRY:** Add `wrapResolveAppIdError(appId, err)` in `common.ts` to centralize the resolveAppId catch block. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, `reviews.ts`, and `app-page-details.ts`.
 - **DRY:** Add `fetchAppPage(url, requestOptions)` in `common.ts`; on 404 returns `null` so callers return their empty value. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, and `app-page-details.ts`.
