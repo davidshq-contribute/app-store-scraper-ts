@@ -1,9 +1,7 @@
 ---
 description: TypeScript and API conventions
-globs: "**/*.ts"
 alwaysApply: false
 ---
-
 # TypeScript Conventions
 
 - **Validation**: Use Zod schemas for any external data (iTunes/Apple responses). Call `schema.safeParse(parsed)` and throw a clear `Error` with the validation message on failure.
