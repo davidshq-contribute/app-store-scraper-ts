@@ -12,11 +12,7 @@ alwaysApply: false
 - **Imports**: Use `../lib/…` (or similar) with `.js` extension for ESM; import from the implementation, not from a barrel that might hide missing exports.
 - **Assertions**: Use `expect(...).toEqual(...)` for value comparison, `expect(() => fn()).toThrow(...)` for thrown errors, `.not.toThrow()` when the call must succeed.
 
-## Tests and code
-
-- **Tests confirm what code does** — we don't rewrite code solely to pass tests. If a test fails, first determine whether the test is wrong or the behavior is wrong.
-- **If a test fails and there is a legitimate code issue**, update the code (fix the bug or behavior), not the test.
-- **Prefer root-cause fixes over patching symptoms** when the change isn't too large. If it's unclear whether to fix the root cause or apply a smaller patch, ask on a per-case basis.
+**Test-vs-code philosophy:** **`test-and-code-fixes.mdc`** (symlinked from **`mac-ai`** when you run **`npm run cursor-rules:sync`**).
 
 ## Coverage and scope
 

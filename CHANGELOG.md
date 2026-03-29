@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering principles, documentation maintenance, AI guidelines, test-and-code-fixes, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
+
 - **`ratingHistogramWarnings` on `app({ ratings: true })`** — When ratings/histogram data is fetched, the result can include warnings if per-star histogram counts disagree with aggregate rating totals. Lets consumers (e.g. mac-store-crawler) log or quarantine without guessing from raw numbers.
 
 - **`scrapeScreenshots` export** — Public entry point for HTML-only screenshot fetching when callers need screenshots without the full `app()` flow (used by crawler image-queue fallback).

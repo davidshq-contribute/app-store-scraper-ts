@@ -37,6 +37,7 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "cursor-rules:sync": "bash scripts/sync-mac-ai-cursor-rules.sh",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm run typecheck"
   },
