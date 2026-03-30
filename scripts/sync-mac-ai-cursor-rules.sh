@@ -8,7 +8,7 @@ TARGET="${ROOT}/.cursor/rules"
 # From .cursor/rules: .. → .cursor, ../.. → package root, ../../.. → mac-project (sibling repos)
 MAC_REL="../../../mac-ai/.cursor/rules"
 RULES=(
-  engineering-principles.mdc
+  engineering-standards.mdc
   documentation-maintenance.mdc
   ai-guidelines.mdc
   test-and-code-fixes.mdc
