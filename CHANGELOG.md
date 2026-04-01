@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
+
 ### Added
 
 - **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering principles, documentation maintenance, AI guidelines, test-and-code-fixes, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
@@ -16,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`scrapeScreenshots` export** — Public entry point for HTML-only screenshot fetching when callers need screenshots without the full `app()` flow (used by crawler image-queue fallback).
 
 ### Changed
+
+- **`doRequest` / `fetch` typing** — Document why `dispatcher` uses an `unknown` bridge between npm **`undici`** and `@types/node`’s `RequestInit`; cast target is `NonNullable<RequestInit['dispatcher']>`.
 
 - **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues).
 

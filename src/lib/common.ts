@@ -4,9 +4,18 @@ import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
 import { HttpError, ValidationError } from './errors.js';
 import { validateCountry } from './validate.js';
+import { Agent, interceptors } from 'undici';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 0;
+
+/**
+ * Undici's default redirect cap is low; Apple's amp-api / app-page HTML can exceed it on some networks.
+ * Pass a composed dispatcher into global `fetch` (Node 18+) so redirects are capped higher; tests still mock `fetch`.
+ */
+const fetchDispatcher = new Agent().compose(
+  interceptors.redirect({ maxRedirections: 64 })
+);
 
 /**
  * Valid `kind` values for app records returned by the iTunes API.
@@ -96,6 +105,8 @@ function backoffMs(attempt: number, baseMs = 1000): number {
  * - Default headers (User-Agent, Accept, Accept-Language) are merged with `requestOptions.headers`; custom
  *   headers override defaults. To avoid bot detection when the default User-Agent ages, pass
  *   `headers: { 'User-Agent': '...' }` in requestOptions.
+ * - Redirect following uses Undici’s redirect interceptor (64 hops) via `fetch`’s `dispatcher` so long
+ *   Apple chains are less likely to hit the default `redirect count exceeded` error.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   // Stryker disable StringLiteral: default header values are not behavioral contracts
@@ -129,6 +140,12 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
           ...(options?.headers ?? {}),
         },
         signal,
+        // Runtime: Node's global `fetch` accepts npm `undici` dispatchers. TypeScript: `RequestInit['dispatcher']`
+        // comes from `@types/node` (undici-types), which duplicates undici's types and does not unify with the
+        // package's `Agent` — `unknown` is the intentional bridge. Keep `undici` semver close to Node's embedded version.
+        dispatcher: fetchDispatcher as unknown as NonNullable<
+          RequestInit['dispatcher']
+        >,
       });
 
       if (!response.ok) {
