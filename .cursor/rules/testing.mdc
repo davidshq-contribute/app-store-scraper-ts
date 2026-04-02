@@ -12,7 +12,7 @@ alwaysApply: false
 - **Imports**: Use `../lib/…` (or similar) with `.js` extension for ESM; import from the implementation, not from a barrel that might hide missing exports.
 - **Assertions**: Use `expect(...).toEqual(...)` for value comparison, `expect(() => fn()).toThrow(...)` for thrown errors, `.not.toThrow()` when the call must succeed.
 
-**Test-vs-code philosophy:** **`test-and-code-fixes.mdc`** (symlinked from **`mac-ai`** when you run **`npm run cursor-rules:sync`**).
+**Tests vs production code:** **`engineering-standards.mdc`** (symlinked from **`mac-ai`** when you run **`npm run cursor-rules:sync`**) — see **Tests and production code** in that file.
 
 ## Coverage and scope
 

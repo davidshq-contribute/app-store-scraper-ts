@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`scripts/sync-mac-ai-cursor-rules.sh`**: Drop symlink for removed **`mac-ai`** rule **`test-and-code-fixes.mdc`** (content lives under **`engineering-standards.mdc`** and **`testing-standards.mdc`**).
+
 ### Fixed
 
 - **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
 
 ### Added
 
-- **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering principles, documentation maintenance, AI guidelines, test-and-code-fixes, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
+- **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering standards, documentation standards, AI standards, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
 
 - **`ratingHistogramWarnings` on `app({ ratings: true })`** — When ratings/histogram data is fetched, the result can include warnings if per-star histogram counts disagree with aggregate rating totals. Lets consumers (e.g. mac-store-crawler) log or quarantine without guessing from raw numbers.
 

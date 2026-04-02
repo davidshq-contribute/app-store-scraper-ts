@@ -6,10 +6,10 @@
 
 **Sync shared rules:** With **`mac-ai`** checked out as **`../mac-ai`** (same parent as this repo), run **`npm run cursor-rules:sync`** so **`.cursor/rules/`** gets symlinks to canonical **`mac-ai`** rules.
 
-- **`alwaysApply: true` (from `mac-ai`):** `engineering-standards.mdc`, `documentation-maintenance.mdc`, `ai-guidelines.mdc`, `test-and-code-fixes.mdc`
+- **`alwaysApply: true` (from `mac-ai`):** `engineering-standards.mdc` (includes tests vs production code), `documentation-standards.mdc`, `ai-standards.mdc`
 - **`globs` (from `mac-ai`):** `typescript-standards.mdc`
 - **`alwaysApply: true` (local):** [`.cursor/rules/project-standards.mdc`](.cursor/rules/project-standards.mdc) — scraper-specific stack, Zod, security, **`docs/`** conventions
-- **Tests (`globs`, local):** [`.cursor/rules/testing.mdc`](.cursor/rules/testing.mdc) — Vitest patterns (test-vs-code: **`test-and-code-fixes.mdc`** after sync)
+- **Tests (`globs`, local):** [`.cursor/rules/testing.mdc`](.cursor/rules/testing.mdc) — Vitest patterns; tests-vs-production posture in **`engineering-standards.mdc`** after sync
 
 ## Skills
 

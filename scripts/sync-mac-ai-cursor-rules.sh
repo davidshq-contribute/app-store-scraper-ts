@@ -9,9 +9,8 @@ TARGET="${ROOT}/.cursor/rules"
 MAC_REL="../../../mac-ai/.cursor/rules"
 RULES=(
   engineering-standards.mdc
-  documentation-maintenance.mdc
-  ai-guidelines.mdc
-  test-and-code-fixes.mdc
+  documentation-standards.mdc
+  ai-standards.mdc
   typescript-standards.mdc
 )
 
