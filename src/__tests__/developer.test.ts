@@ -21,6 +21,13 @@ describe('developer', () => {
     expect((err as ValidationError).field).toBe('devId');
   });
 
+  it('throws ValidationError when devId is not a positive integer', async () => {
+    const err = await developer({ devId: Number.NaN }).catch((e) => e);
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as ValidationError).field).toBe('devId');
+    expect((err as Error).message).toBe('devId must be a positive integer');
+  });
+
   it('calls lookup with artistId field', async () => {
     const lookupResponse = {
       resultCount: 1,

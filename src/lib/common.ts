@@ -65,6 +65,11 @@ function isRetryable(status?: number, err?: unknown): boolean {
   return false;
 }
 
+/** Returns true for fetch timeout errors produced by AbortSignal.timeout(). */
+function isTimeoutError(err: Error): boolean {
+  return err.name === 'AbortError' || err.name === 'TimeoutError';
+}
+
 /**
  * Type guard: true when value is an object with a numeric `status` property (e.g. HttpError-like).
  * Used in doRequest catch block to read status for retry logic without type assertions.
@@ -167,7 +172,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const status = hasStatus(err) ? err.status : undefined;
-      if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
+      if (attempt < maxRetries && (isRetryable(status, err) || isTimeoutError(lastError))) {
         const delayMs = backoffMs(attempt);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
@@ -418,5 +423,20 @@ export function validateRequiredField<T extends object>(
   const hasField = fields.some((field) => opts[field] != null);
   if (!hasField) {
     throw new ValidationError(errorMessage, fields.join('/'));
+  }
+}
+
+/**
+ * Validates a public numeric Apple identifier before URL/request construction.
+ * Keeps JavaScript callers from passing NaN, Infinity, strings, decimals, or negative values.
+ * @internal
+ */
+export function validatePositiveIntegerId(value: unknown, field: string): asserts value is number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value <= 0
+  ) {
+    throw new ValidationError(`${field} must be a positive integer`, field);
   }
 }

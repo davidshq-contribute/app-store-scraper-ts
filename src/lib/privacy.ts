@@ -8,6 +8,7 @@ import {
   validateRequiredField,
   resolveAppId,
   wrapResolveAppIdError,
+  validatePositiveIntegerId,
 } from './common.js';
 import { validateCountry } from './validate.js';
 import { ValidationError } from './errors.js';
@@ -46,6 +47,7 @@ export async function privacy(options: PrivacyOptions): Promise<PrivacyDetails> 
   if (id == null) {
     throw new ValidationError('Either id or appId is required', 'id/appId');
   }
+  validatePositiveIntegerId(id, 'id');
 
   const url = appPageUrl(country, id);
   const appPageBody = await fetchAppPage(url, requestOptions);

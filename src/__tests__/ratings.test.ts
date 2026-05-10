@@ -99,6 +99,20 @@ describe('parseRatings', () => {
     expect(result.ratings).toBe(12345);
   });
 
+  it('parses histogram row counts with thousands separators', () => {
+    const html = `<div>
+      <div class="rating-count">12,345 Ratings</div>
+      <span class="vote"><span class="total">5,000</span></span>
+      <span class="vote"><span class="total">3,000</span></span>
+      <span class="vote"><span class="total">2,000</span></span>
+      <span class="vote"><span class="total">1,000</span></span>
+      <span class="vote"><span class="total">1,345</span></span>
+    </div>`;
+    const result = parseRatings(html);
+    expect(result.histogram).toEqual({ 1: 1345, 2: 1000, 3: 2000, 4: 3000, 5: 5000 });
+    expect(result.warnings).toBeUndefined();
+  });
+
   it('returns parsed result with warnings when histogram sum does not match total (page structure change)', () => {
     // Total 999 but first 5 bars sum to 10+20+30+25+15 = 100; sanity check detects mismatch.
     const html = fixtureHtml(999, 10, 20, 30, 25, 15);
@@ -220,6 +234,16 @@ describe('ratings()', () => {
     );
     expect(err).toBeInstanceOf(ValidationError);
     expect((err as Error).message).toBe('id is required');
+  });
+
+  it('throws ValidationError when id is not a positive integer', async () => {
+    const err = await ratings({ id: Number.NaN }).then(
+      () => expect.fail('expected rejection'),
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as ValidationError).field).toBe('id');
+    expect(common.doRequest).not.toHaveBeenCalled();
   });
 
   it('passes X-Apple-Store-Front header with correct storefront', async () => {

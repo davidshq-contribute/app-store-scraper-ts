@@ -10,8 +10,9 @@ import {
   safeParseInt,
   lookup,
   appPageUrl,
+  validatePositiveIntegerId,
 } from '../lib/common.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, ValidationError } from '../lib/errors.js';
 
 /** Minimal iTunes lookup JSON so lookup() returns one app with the given trackId. */
 function minimalLookupJson(trackId: number): string {
@@ -69,6 +70,22 @@ describe('common utilities', () => {
       const undefinedResult = safeParseInt(undefined, 99);
       expect(nullResult).toBe(99);
       expect(undefinedResult).toBe(99);
+    });
+  });
+
+  describe('validatePositiveIntegerId', () => {
+    it('accepts positive safe integers', () => {
+      expect(() => validatePositiveIntegerId(1, 'id')).not.toThrow();
+      expect(() => validatePositiveIntegerId(553834731, 'id')).not.toThrow();
+    });
+
+    it('throws ValidationError for invalid numeric identifiers', () => {
+      for (const value of [0, -1, 1.5, Number.NaN, Infinity, '123']) {
+        const err = getError(() => validatePositiveIntegerId(value, 'id'));
+        expect(err).toBeInstanceOf(ValidationError);
+        expect((err as ValidationError).field).toBe('id');
+        expect(err.message).toBe('id must be a positive integer');
+      }
     });
   });
 
@@ -651,6 +668,23 @@ describe('common utilities', () => {
         vi
           .fn()
           .mockRejectedValueOnce(new TypeError('fetch failed'))
+          .mockResolvedValueOnce({
+            ok: true,
+            text: () => Promise.resolve('recovered'),
+          })
+      );
+      const body = await doRequest('https://example.com', { retries: 1 });
+      expect(body).toBe('recovered');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries on TimeoutError and eventually succeeds', async () => {
+      const timeoutError = new Error('The operation was aborted due to timeout');
+      timeoutError.name = 'TimeoutError';
+      stubFetch(
+        vi
+          .fn()
+          .mockRejectedValueOnce(timeoutError)
           .mockResolvedValueOnce({
             ok: true,
             text: () => Promise.resolve('recovered'),
