@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import { similar, getLinkTypeFromHeadingText } from '../lib/similar.js';
 import * as common from '../lib/common.js';
 import type { App } from '../types/app.js';
@@ -288,6 +288,10 @@ describe('similar', () => {
   });
 
   describe.skipIf(!runIntegrationTests)('live API', () => {
+    afterEach(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    });
+
     beforeAll(async () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
       vi.mocked(common.fetchAppPage).mockImplementation(actual.fetchAppPage);

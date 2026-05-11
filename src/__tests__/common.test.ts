@@ -10,8 +10,9 @@ import {
   safeParseInt,
   lookup,
   appPageUrl,
+  validatePositiveIntegerId,
 } from '../lib/common.js';
-import { HttpError } from '../lib/errors.js';
+import { HttpError, ValidationError } from '../lib/errors.js';
 
 /** Minimal iTunes lookup JSON so lookup() returns one app with the given trackId. */
 function minimalLookupJson(trackId: number): string {
@@ -69,6 +70,22 @@ describe('common utilities', () => {
       const undefinedResult = safeParseInt(undefined, 99);
       expect(nullResult).toBe(99);
       expect(undefinedResult).toBe(99);
+    });
+  });
+
+  describe('validatePositiveIntegerId', () => {
+    it('accepts positive safe integers', () => {
+      expect(() => validatePositiveIntegerId(1, 'id')).not.toThrow();
+      expect(() => validatePositiveIntegerId(553834731, 'id')).not.toThrow();
+    });
+
+    it('throws ValidationError for invalid numeric identifiers', () => {
+      for (const value of [0, -1, 1.5, Number.NaN, Infinity, '123']) {
+        const err = getError(() => validatePositiveIntegerId(value, 'id'));
+        expect(err).toBeInstanceOf(ValidationError);
+        expect((err as ValidationError).field).toBe('id');
+        expect(err.message).toBe('id must be a positive integer');
+      }
     });
   });
 
@@ -661,6 +678,23 @@ describe('common utilities', () => {
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
+    it('retries on TimeoutError and eventually succeeds', async () => {
+      const timeoutError = new Error('The operation was aborted due to timeout');
+      timeoutError.name = 'TimeoutError';
+      stubFetch(
+        vi
+          .fn()
+          .mockRejectedValueOnce(timeoutError)
+          .mockResolvedValueOnce({
+            ok: true,
+            text: () => Promise.resolve('recovered'),
+          })
+      );
+      const body = await doRequest('https://example.com', { retries: 1 });
+      expect(body).toBe('recovered');
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
     it('throws TypeError when retries exhausted on network error', async () => {
       stubFetch(vi.fn().mockRejectedValue(new TypeError('fetch failed')));
       const err = await doRequest('https://example.com', { retries: 1 }).catch((e) => e);
@@ -740,7 +774,7 @@ describe('common utilities', () => {
     it('should not throw when one of multiple fields is present', () => {
       expect(() => {
         validateRequiredField(
-          { id: undefined, appId: 'test' } as { id?: number; appId?: string },
+          { id: undefined, appId: 'test' },
           ['id', 'appId'],
           'Either id or appId required'
         );
@@ -749,14 +783,14 @@ describe('common utilities', () => {
 
     it('should throw when no required field is present', () => {
       expect(() => {
-        validateRequiredField({ id: undefined } as { id?: number }, ['id'], 'ID required');
+        validateRequiredField({ id: undefined }, ['id'], 'ID required');
       }).toThrow('ID required');
     });
 
     it('should throw when none of multiple fields are present', () => {
       expect(() => {
         validateRequiredField(
-          { id: undefined, appId: undefined } as { id?: number; appId?: string },
+          { id: undefined, appId: undefined },
           ['id', 'appId'],
           'Either id or appId required'
         );

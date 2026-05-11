@@ -10,6 +10,7 @@ import {
   lookup,
   resolveAppId,
   wrapResolveAppIdError,
+  validatePositiveIntegerId,
 } from './common.js';
 import { validateCountry } from './validate.js';
 import { ValidationError } from './errors.js';
@@ -71,6 +72,7 @@ export async function similar(options: SimilarOptions): Promise<SimilarApp[] | A
   if (id == null) {
     throw new ValidationError('Either id or appId is required', 'id/appId');
   }
+  validatePositiveIntegerId(id, 'id');
 
   // Build URL for main app page (contains similar apps embedded in HTML)
   const url = appPageUrl(country, id);

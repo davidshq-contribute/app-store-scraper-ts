@@ -1,18 +1,30 @@
 ---
-description: Project overview and documentation standards
+description: App-store-scraper–specific stack, Zod, security, and docs conventions (shared baseline via symlinked mac-ai rules)
 alwaysApply: true
 ---
 
-# App Store Scraper – Project Standards
+# App Store Scraper – Project standards
 
-- **Stack**: TypeScript (ESM), Node ≥20, Vitest, Zod, tsup. Use `src/lib/*.ts` for core logic; types in `src/types/`.
-- **Documentation**: When adding or updating code, create or update the code documentation that goes along with it (JSDoc for public APIs, README/CHANGELOG if user-facing).
-- **External data**: Validate all API/HTML responses with Zod schemas from `src/lib/schemas.ts`. Prefer `safeParse` and throw clear errors on failure.
-- **Security**: Do not interpolate user/options (e.g. `country`, `collection`, `category`, `sort`) into URLs without validating against allowlists (e.g. `markets`, `Collection`, `Category`). See `docs/CODE-REVIEW.md` for details.
-- **Design decisions**: For non-obvious choices (e.g. API vs scraping, token handling), check `docs/DEV-DECISIONS.md` and keep it updated when making or reversing such decisions.
-- **Postponed work**: Before implementing enhancements (e.g. new options, store-specific behavior, parity with other scrapers), check `docs/POSTPONED.md` so we don’t accidentally implement something we’ve deferred.
+**Shared baseline:** This directory also includes **symlinks** to **`mac-ai`** (engineering principles, documentation/changelog habits, AI guidelines, test-vs-code + Stryker, TypeScript standards). Run **`npm run cursor-rules:sync`** after clone if **`mac-ai`** is a sibling under **`mac-project`**. Clones without **`mac-ai`** keep only this file and **`testing.mdc`** until you run sync.
 
-- Evaluate code changes and recommendations from a pragmatic engineering perspective. We want high quality code with a good velocity. Is it YAGNI? If so, lets us know, and we will decide whether to do it or not.
-- Update the CHANGELOG.md as we go, don't cover minuscule changes but anything substantial. Changelogs report only what was implemented; do not reference todo docs (e.g. POSTPONED.md), issue lists, or similar "items to do."
+## Stack and layout
 
-- Remind me to stay on target if I start working on things that aren't pragmatic or moving us forward.
+- **Stack**: TypeScript (ESM), Node ≥20, Vitest, Zod, tsup. Core logic in **`src/lib/*.ts`**; types in **`src/types/`**.
+
+## Documentation (this package)
+
+- **JSDoc** for public APIs; **README** for user-facing behavior.
+- **`CHANGELOG.md`** at **this package root** (not **`mac-prototype`** paths): substantial changes only (skip minuscule churn).
+
+## External data
+
+- Validate API/HTML responses with Zod schemas from **`src/lib/schemas.ts`**. Prefer **`safeParse`** and throw clear errors on failure.
+
+## Security
+
+- Do not interpolate user/options (e.g. `country`, `collection`, `category`, `sort`) into URLs without validating against allowlists (e.g. `markets`, `Collection`, `Category`). See **`docs/CODE-REVIEW.md`**.
+
+## Design and deferred work
+
+- **Design decisions:** **`docs/DEV-DECISIONS.md`** — consult and update for non-obvious choices (API vs scraping, token handling, etc.).
+- **Postponed work:** **`docs/POSTPONED.md`** — check before implementing deferred enhancements (new options, store-specific behavior, parity).

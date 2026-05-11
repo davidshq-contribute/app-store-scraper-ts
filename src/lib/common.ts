@@ -4,9 +4,18 @@ import { iTunesLookupResponseSchema, type ITunesAppResponse } from './schemas.js
 import type { RequestOptions, ResolveAppIdOptions } from '../types/options.js';
 import { HttpError, ValidationError } from './errors.js';
 import { validateCountry } from './validate.js';
+import { Agent, interceptors } from 'undici';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 0;
+
+/**
+ * Undici's default redirect cap is low; Apple's amp-api / app-page HTML can exceed it on some networks.
+ * Pass a composed dispatcher into global `fetch` (Node 18+) so redirects are capped higher; tests still mock `fetch`.
+ */
+const fetchDispatcher = new Agent().compose(
+  interceptors.redirect({ maxRedirections: 64 })
+);
 
 /**
  * Valid `kind` values for app records returned by the iTunes API.
@@ -56,6 +65,11 @@ function isRetryable(status?: number, err?: unknown): boolean {
   return false;
 }
 
+/** Returns true for fetch timeout errors produced by AbortSignal.timeout(). */
+function isTimeoutError(err: Error): boolean {
+  return err.name === 'AbortError' || err.name === 'TimeoutError';
+}
+
 /**
  * Type guard: true when value is an object with a numeric `status` property (e.g. HttpError-like).
  * Used in doRequest catch block to read status for retry logic without type assertions.
@@ -96,6 +110,8 @@ function backoffMs(attempt: number, baseMs = 1000): number {
  * - Default headers (User-Agent, Accept, Accept-Language) are merged with `requestOptions.headers`; custom
  *   headers override defaults. To avoid bot detection when the default User-Agent ages, pass
  *   `headers: { 'User-Agent': '...' }` in requestOptions.
+ * - Redirect following uses Undici’s redirect interceptor (64 hops) via `fetch`’s `dispatcher` so long
+ *   Apple chains are less likely to hit the default `redirect count exceeded` error.
  */
 export async function doRequest(url: string, options?: RequestOptions): Promise<string> {
   // Stryker disable StringLiteral: default header values are not behavioral contracts
@@ -129,6 +145,12 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
           ...(options?.headers ?? {}),
         },
         signal,
+        // Runtime: Node's global `fetch` accepts npm `undici` dispatchers. TypeScript: `RequestInit['dispatcher']`
+        // comes from `@types/node` (undici-types), which duplicates undici's types and does not unify with the
+        // package's `Agent` — `unknown` is the intentional bridge. Keep `undici` semver close to Node's embedded version.
+        dispatcher: fetchDispatcher as unknown as NonNullable<
+          RequestInit['dispatcher']
+        >,
       });
 
       if (!response.ok) {
@@ -150,7 +172,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const status = hasStatus(err) ? err.status : undefined;
-      if (attempt < maxRetries && (isRetryable(status, err) || lastError?.name === 'AbortError')) {
+      if (attempt < maxRetries && (isRetryable(status, err) || isTimeoutError(lastError))) {
         const delayMs = backoffMs(attempt);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
@@ -401,5 +423,20 @@ export function validateRequiredField<T extends object>(
   const hasField = fields.some((field) => opts[field] != null);
   if (!hasField) {
     throw new ValidationError(errorMessage, fields.join('/'));
+  }
+}
+
+/**
+ * Validates a public numeric Apple identifier before URL/request construction.
+ * Keeps JavaScript callers from passing NaN, Infinity, strings, decimals, or negative values.
+ * @internal
+ */
+export function validatePositiveIntegerId(value: unknown, field: string): asserts value is number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value <= 0
+  ) {
+    throw new ValidationError(`${field} must be a positive integer`, field);
   }
 }

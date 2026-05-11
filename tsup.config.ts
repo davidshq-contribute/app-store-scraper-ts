@@ -11,4 +11,6 @@ export default defineConfig({
   minify: false,
   target: 'es2022',
   outDir: 'dist',
+  /** Keep HTTP client as a runtime dependency (same as Node's fetch implementation). */
+  external: ['undici'],
 });

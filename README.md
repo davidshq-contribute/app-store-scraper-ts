@@ -2,6 +2,8 @@
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
+**Cursor / AI:** [AGENTS.md](AGENTS.md) — links to `.cursor/rules`, `.cursor/skills`, and monorepo **`mac-ai`** baselines. With **`mac-ai`** as a sibling repo, run **`npm run cursor-rules:sync`** to symlink shared **`.mdc`** rules.
+
 This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies. It is a fork of the [TS rewrite by Perttu](https://github.com/plahteenlahti/app-store-scraper).
 
 ## Features

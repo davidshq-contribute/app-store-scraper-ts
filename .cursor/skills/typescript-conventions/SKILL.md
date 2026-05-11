@@ -1,6 +1,6 @@
 ---
+name: typescript-conventions
 description: TypeScript and API conventions
-alwaysApply: false
 ---
 # TypeScript Conventions
 

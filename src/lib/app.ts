@@ -2,7 +2,13 @@ import * as cheerio from 'cheerio';
 import type { App } from '../types/app.js';
 import type { AppOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { appPageUrl, doRequest, lookup, validateRequiredField } from './common.js';
+import {
+  appPageUrl,
+  doRequest,
+  lookup,
+  validatePositiveIntegerId,
+  validateRequiredField,
+} from './common.js';
 import { validateCountry } from './validate.js';
 import { HttpError, RatingsEmptyError } from './errors.js';
 import { ratings } from './ratings.js';
@@ -159,6 +165,7 @@ export async function app(options: AppOptions): Promise<App> {
     requestOptions,
   } = options;
   validateCountry(country);
+  if (id != null) validatePositiveIntegerId(id, 'id');
   // lookupId is defined: validateRequiredField ensures at least one of id, appId is present
   const lookupId = (id ?? appId) as string | number;
 

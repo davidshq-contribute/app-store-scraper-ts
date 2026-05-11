@@ -1,7 +1,7 @@
 import type { App } from '../types/app.js';
 import type { DeveloperOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { lookup } from './common.js';
+import { lookup, validatePositiveIntegerId } from './common.js';
 import { ValidationError } from './errors.js';
 import { validateCountry } from './validate.js';
 
@@ -24,6 +24,7 @@ export async function developer(options: DeveloperOptions): Promise<App[]> {
   if (devId == null) {
     throw new ValidationError('devId is required', 'devId');
   }
+  validatePositiveIntegerId(devId, 'devId');
 
   return lookup(devId, 'artistId', country, lang, requestOptions);
 }

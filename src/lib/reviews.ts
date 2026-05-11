@@ -8,6 +8,7 @@ import {
   parseAndValidate,
   resolveAppId,
   wrapResolveAppIdError,
+  validatePositiveIntegerId,
 } from './common.js';
 import { ValidationError } from './errors.js';
 import { validateCountry, validateSort, validateReviewsPage } from './validate.js';
@@ -69,6 +70,7 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   if (id == null) {
     throw new ValidationError('Either id or appId is required', 'id/appId');
   }
+  validatePositiveIntegerId(id, 'id');
 
   const url = `https://itunes.apple.com/${country}/rss/customerreviews/page=${page}/id=${id}/sortby=${sort}/json`;
 

@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import type { Ratings, RatingHistogram } from '../types/app.js';
 import type { RatingsOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import { doRequest, storeId, validateRequiredField } from './common.js';
+import { doRequest, storeId, validatePositiveIntegerId, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
 import { RatingsEmptyError } from './errors.js';
 
@@ -26,6 +26,7 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
   const { id, country = DEFAULT_COUNTRY, requestOptions } = options;
 
   validateRequiredField(options, ['id'], 'id is required');
+  validatePositiveIntegerId(id, 'id');
   validateCountry(country);
 
   const storeFront = storeId(country);
@@ -57,15 +58,17 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
 export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
-  // Extract total rating count
-  const ratingCountText = $('.rating-count').text();
-  const ratingCountMatch = ratingCountText.match(/\d[\d\s,.\u00A0\u202F]*/);
-  const totalRatings = (() => {
-    const normalized = ratingCountMatch?.[0]?.replace(/\D/g, '') ?? '';
+  function parseCountText(text: string): number {
+    const normalized = text.replace(/\D/g, '');
     if (normalized === '') return 0;
     const parsed = parseInt(normalized, 10);
     return Number.isNaN(parsed) ? 0 : parsed;
-  })();
+  }
+
+  // Extract total rating count
+  const ratingCountText = $('.rating-count').text();
+  const ratingCountMatch = ratingCountText.match(/\d[\d\s,.\u00A0\u202F]*/);
+  const totalRatings = parseCountText(ratingCountMatch?.[0] ?? '');
 
   // Extract per-row vote elements. Each .vote row has a .total with the count.
   // We try to detect the star rating from labels in the row (aria-label, text
@@ -82,8 +85,7 @@ export function parseRatings(html: string): Ratings {
   voteRows.each((_, row) => {
     const $row = $(row);
     const countText = $row.find('.total').text();
-    const parsed = parseInt(countText, 10);
-    const count = Number.isNaN(parsed) ? 0 : parsed;
+    const count = parseCountText(countText);
 
     // Try aria-label on the row or its children, then fall back to text matching
     const ariaLabel = $row.attr('aria-label') ?? $row.find('[aria-label]').attr('aria-label') ?? '';
@@ -115,8 +117,7 @@ export function parseRatings(html: string): Ratings {
     // Fall back to positional assumption: descending order (5★, 4★, 3★, 2★, 1★).
     const rawByStar: number[] = $('.vote .total')
       .map((_, el) => {
-        const n = parseInt($(el).text(), 10);
-        return Number.isNaN(n) ? 0 : n;
+        return parseCountText($(el).text());
       })
       .get();
     const ratingsByStar = rawByStar.slice(0, 5);

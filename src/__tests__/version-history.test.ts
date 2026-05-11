@@ -67,8 +67,8 @@ describe('versionHistory', () => {
 
   describe('validation', () => {
     it('throws ValidationError when neither id nor appId is provided', async () => {
-      await expect(versionHistory({} as never)).rejects.toThrow(ValidationError);
-      await expect(versionHistory({} as never)).rejects.toThrow('Either id or appId is required');
+      await expect(versionHistory({})).rejects.toThrow(ValidationError);
+      await expect(versionHistory({})).rejects.toThrow('Either id or appId is required');
     });
 
     it('throws ValidationError for invalid country', async () => {

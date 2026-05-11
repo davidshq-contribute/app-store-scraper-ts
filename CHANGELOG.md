@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`scripts/sync-mac-ai-cursor-rules.sh`**: Drop symlink for removed **`mac-ai`** rule **`test-and-code-fixes.mdc`** (content lives under **`engineering-standards.mdc`** and **`testing-standards.mdc`**).
+
+### Fixed
+
+- **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
+
+### Added
+
+- **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering standards, documentation standards, AI standards, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
+
+- **`ratingHistogramWarnings` on `app({ ratings: true })`** — When ratings/histogram data is fetched, the result can include warnings if per-star histogram counts disagree with aggregate rating totals. Lets consumers (e.g. mac-store-crawler) log or quarantine without guessing from raw numbers.
+
+- **`scrapeScreenshots` export** — Public entry point for HTML-only screenshot fetching when callers need screenshots without the full `app()` flow (used by crawler image-queue fallback).
+
+### Changed
+
+- **`doRequest` / `fetch` typing** — Document why `dispatcher` uses an `unknown` bridge between npm **`undici`** and `@types/node`’s `RequestInit`; cast target is `NonNullable<RequestInit['dispatcher']>`.
+
+- **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues).
+
 - **DRY:** Add `wrapResolveAppIdError(appId, err)` in `common.ts` to centralize the resolveAppId catch block. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, `reviews.ts`, and `app-page-details.ts`.
 - **DRY:** Add `fetchAppPage(url, requestOptions)` in `common.ts`; on 404 returns `null` so callers return their empty value. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, and `app-page-details.ts`.
 - **doRequest retry consistency:** Use `backoffMs(attempt)` in the catch block so both retry paths (HTTP errors and network errors) use the same jittered backoff.
