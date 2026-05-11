@@ -7,15 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **`scripts/sync-mac-ai-cursor-rules.sh`**: Drop symlink for removed **`mac-ai`** rule **`test-and-code-fixes.mdc`** (content lives under **`engineering-standards.mdc`** and **`testing-standards.mdc`**).
-
-### Fixed
-
-- **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
-
 ### Added
+
+- **`npm run test:mutation`** — Runs **Stryker** (`stryker run`; incremental by default per **`stryker.config.json`**). README Development section and Cursor/AI blurb document it next to **`npm run cursor-rules:sync`**.
 
 - **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering standards, documentation standards, AI standards, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
 
@@ -23,11 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`scrapeScreenshots` export** — Public entry point for HTML-only screenshot fetching when callers need screenshots without the full `app()` flow (used by crawler image-queue fallback).
 
+### Testing
+
+- **Vitest** — Exclude **`**/.stryker-tmp/**`** from test discovery and coverage so Stryker’s sandbox copy is not executed as a second full suite (see **`vitest.config.ts`**; spread **`configDefaults.exclude`** per Vitest docs).
+
+- **`version-history` tests** — Assert **`ValidationError.field`** for missing ids, invalid country, and non-positive numeric **`id`**.
+- **`reviews` tests** — Assert **`id`** validation (non-positive integers), **`HttpError`** propagation from **`doRequest`**, and **`HttpError`** for invalid JSON bodies before schema parse.
+- **`suggest.test.ts`:** Assert **`SUGGEST_XML_PARSER_OPTIONS`** (**`attributeNamePrefix: '@_'`**, **`ignoreAttributes: false`**) for fast-xml-parser plist parsing (mutation / contract).
+
+### Fixed
+
+- **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
+
 ### Changed
+
+- **`typescript`** (^6.0.x) — Raise devDependency from 5.x to TypeScript 6. Add **`dts-for-tsup.json`** (extends **`tsconfig.json`**) with **`ignoreDeprecations`: `"6.0"`** for **tsup** only so DTS emit avoids TS5101 (**`baseUrl`** from the rollup DTS path); keep it off root **`tsconfig.json`** so editors / JSON schemas that only allow TS 5 values do not report an invalid **`ignoreDeprecations`**. **`tsup.config.ts`:** **`tsconfig: 'dts-for-tsup.json'`**. README Development summarizes **`tsconfig.json`** vs **`dts-for-tsup.json`**; **`package.json`** **`format`** / **`format:check`** run Prettier on **`*.config.ts`** and **`dts-for-tsup.json`** (and **`src/**/*.ts`**).
+
+- **`scripts/sync-mac-ai-cursor-rules.sh`**: Drop symlink for removed **`mac-ai`** rule **`test-and-code-fixes.mdc`** (content lives under **`engineering-standards.mdc`** and **`testing-standards.mdc`**).
 
 - **`doRequest` / `fetch` typing** — Document why `dispatcher` uses an `unknown` bridge between npm **`undici`** and `@types/node`’s `RequestInit`; cast target is `NonNullable<RequestInit['dispatcher']>`.
 
-- **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues).
+- **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues). Export **`SUGGEST_XML_PARSER_OPTIONS`** (**fast-xml-parser** plist: **`ignoreAttributes: false`**, **`attributeNamePrefix: '@_'`**) for **`suggest()`** and unit tests; not re-exported from the package entry — deep-import from **`./lib/suggest.js`** only if you need the same contract.
 
 - **DRY:** Add `wrapResolveAppIdError(appId, err)` in `common.ts` to centralize the resolveAppId catch block. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, `reviews.ts`, and `app-page-details.ts`.
 - **DRY:** Add `fetchAppPage(url, requestOptions)` in `common.ts`; on 404 returns `null` so callers return their empty value. Use in `privacy.ts`, `version-history.ts`, `similar.ts`, and `app-page-details.ts`.

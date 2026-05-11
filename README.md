@@ -2,7 +2,7 @@
 
 Modern TypeScript library to scrape application data from the iTunes/Mac App Store.
 
-**Cursor / AI:** [AGENTS.md](AGENTS.md) — links to `.cursor/rules`, `.cursor/skills`, and monorepo **`mac-ai`** baselines. With **`mac-ai`** as a sibling repo, run **`npm run cursor-rules:sync`** to symlink shared **`.mdc`** rules.
+**Cursor / AI:** [AGENTS.md](AGENTS.md) — links to `.cursor/rules`, `.cursor/skills`, and monorepo **`mac-ai`** baselines. With **`mac-ai`** as a sibling repo under the same parent as this package, run **`npm run cursor-rules:sync`** after clone or when shared rule names change; that (re)creates symlinks in **`.cursor/rules/`** to canonical files in **`mac-ai`** (avoid hand-linking stale names). Mutation testing uses **`stryker.config.json`**; run **`npm run test:mutation`** (Stryker’s incremental mode is on by default—do not pass `--no-incremental` for routine runs).
 
 This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https://github.com/facundoolano/app-store-scraper) with full type safety and modern dependencies. It is a fork of the [TS rewrite by Perttu](https://github.com/plahteenlahti/app-store-scraper).
 
@@ -137,6 +137,8 @@ Custom headers are merged over the defaults, so passing `User-Agent` replaces th
 
 ## Development
 
+`npm run typecheck` uses **`tsconfig.json`** (library sources under **`src/`**). **`npm run build`** runs **tsup** with **`dts-for-tsup.json`**, which extends the root config and sets TypeScript 6’s **`ignoreDeprecations`**: **`"6.0"`** so declaration emit avoids **TS5101** from **tsup**’s internal **`baseUrl`** (see **[egoist/tsup#1388](https://github.com/egoist/tsup/issues/1388)**). Keeping that flag off root **`tsconfig.json`** avoids editors / JSON schemas that still reject **`"6.0"`**.
+
 ```bash
 # Install dependencies
 npm install
@@ -156,6 +158,9 @@ npm run test:watch
 # Run tests with coverage
 npm run test:coverage
 
+# Mutation testing (Stryker; incremental by default — see stryker.config.json)
+npm run test:mutation
+
 # Run integration tests (live API; skipped by default)
 npm run test:integration
 
@@ -167,6 +172,9 @@ npm run lint
 
 # Format code
 npm run format
+
+# Check formatting (CI / quick-review)
+npm run format:check
 ```
 
 ## Documentation
