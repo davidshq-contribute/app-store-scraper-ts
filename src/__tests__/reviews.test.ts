@@ -56,6 +56,44 @@ describe('reviews', () => {
     );
   });
 
+  describe('id validation', () => {
+    it('throws ValidationError with field id when id is zero', async () => {
+      const err = await reviews({ id: 0 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('id');
+    });
+
+    it('throws ValidationError with field id when id is negative', async () => {
+      const err = await reviews({ id: -1 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('id');
+    });
+  });
+
+  describe('HTTP and JSON errors from feed request', () => {
+    it('propagates HttpError when doRequest fails', async () => {
+      vi.mocked(common.doRequest).mockRejectedValueOnce(
+        new HttpError(
+          'Service Unavailable',
+          503,
+          'https://itunes.apple.com/us/rss/customerreviews/page=1/id=1/sortby=mostRecent/json'
+        )
+      );
+
+      const err = await reviews({ id: 553834731 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).status).toBe(503);
+    });
+
+    it('throws HttpError when response body is not valid JSON', async () => {
+      vi.mocked(common.doRequest).mockResolvedValueOnce('not json {{{');
+
+      const err = await reviews({ id: 553834731 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).message).toMatch(/Invalid JSON response/);
+    });
+  });
+
   describe('sort option and default', () => {
     const minimalFeed = {
       feed: {

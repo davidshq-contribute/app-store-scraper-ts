@@ -13,9 +13,7 @@ const DEFAULT_RETRIES = 0;
  * Undici's default redirect cap is low; Apple's amp-api / app-page HTML can exceed it on some networks.
  * Pass a composed dispatcher into global `fetch` (Node 18+) so redirects are capped higher; tests still mock `fetch`.
  */
-const fetchDispatcher = new Agent().compose(
-  interceptors.redirect({ maxRedirections: 64 })
-);
+const fetchDispatcher = new Agent().compose(interceptors.redirect({ maxRedirections: 64 }));
 
 /**
  * Valid `kind` values for app records returned by the iTunes API.
@@ -148,9 +146,7 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
         // Runtime: Node's global `fetch` accepts npm `undici` dispatchers. TypeScript: `RequestInit['dispatcher']`
         // comes from `@types/node` (undici-types), which duplicates undici's types and does not unify with the
         // package's `Agent` — `unknown` is the intentional bridge. Keep `undici` semver close to Node's embedded version.
-        dispatcher: fetchDispatcher as unknown as NonNullable<
-          RequestInit['dispatcher']
-        >,
+        dispatcher: fetchDispatcher as unknown as NonNullable<RequestInit['dispatcher']>,
       });
 
       if (!response.ok) {
@@ -432,11 +428,7 @@ export function validateRequiredField<T extends object>(
  * @internal
  */
 export function validatePositiveIntegerId(value: unknown, field: string): asserts value is number {
-  if (
-    typeof value !== 'number' ||
-    !Number.isSafeInteger(value) ||
-    value <= 0
-  ) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new ValidationError(`${field} must be a positive integer`, field);
   }
 }

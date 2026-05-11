@@ -71,8 +71,27 @@ describe('versionHistory', () => {
       await expect(versionHistory({})).rejects.toThrow('Either id or appId is required');
     });
 
-    it('throws ValidationError for invalid country', async () => {
-      await expect(versionHistory({ id: 123, country: 'zz' })).rejects.toThrow(ValidationError);
+    it('sets field id/appId when neither id nor appId is provided', async () => {
+      const err = await versionHistory({}).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('id/appId');
+    });
+
+    it('throws ValidationError for invalid country with field country', async () => {
+      const err = await versionHistory({ id: 123, country: 'zz' }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('country');
+    });
+
+    it('throws ValidationError with field id when id is not a positive integer', async () => {
+      const errZero = await versionHistory({ id: 0 }).catch((e: unknown) => e);
+      expect(errZero).toBeInstanceOf(ValidationError);
+      expect((errZero as ValidationError).field).toBe('id');
+      expect((errZero as ValidationError).message).toContain('positive integer');
+
+      const errNeg = await versionHistory({ id: -1 }).catch((e: unknown) => e);
+      expect(errNeg).toBeInstanceOf(ValidationError);
+      expect((errNeg as ValidationError).field).toBe('id');
     });
   });
 

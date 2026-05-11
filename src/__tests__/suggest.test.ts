@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { suggest } from '../lib/suggest.js';
+import { suggest, SUGGEST_XML_PARSER_OPTIONS } from '../lib/suggest.js';
 import { ValidationError } from '../lib/errors.js';
 import { runIntegrationTests } from './integration.js';
 import * as common from '../lib/common.js';
@@ -15,6 +15,13 @@ vi.mock('../lib/common.js', async (importOriginal) => {
 describe('suggest', () => {
   beforeEach(() => {
     vi.mocked(common.doRequest).mockReset();
+  });
+
+  it('uses fast-xml-parser plist options (ignoreAttributes, attributeNamePrefix @_)', () => {
+    expect(SUGGEST_XML_PARSER_OPTIONS).toEqual({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+    });
   });
 
   it('should throw ValidationError when term is missing', async () => {

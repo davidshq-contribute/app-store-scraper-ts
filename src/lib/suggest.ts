@@ -5,10 +5,17 @@ import { doRequest, ensureArray } from './common.js';
 import { ValidationError } from './errors.js';
 import { suggestResponseSchema } from './schemas.js';
 
-const xmlParser = new XMLParser({
+/**
+ * fast-xml-parser options for Apple's plist XML (`suggest` hints endpoint).
+ * Attributes must use the default **`@_` prefix** so plist metadata (e.g. `version` on `plist`, `encoding` on the XML declaration) does not collide with child element names when merged into the parsed object.
+ * Not exported from the package root; kept public on this module for tests and tooling.
+ */
+export const SUGGEST_XML_PARSER_OPTIONS = {
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-});
+} as const;
+
+const xmlParser = new XMLParser(SUGGEST_XML_PARSER_OPTIONS);
 
 /**
  * Retrieves search term suggestions (autocomplete).
