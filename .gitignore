@@ -31,3 +31,5 @@ yarn-error.log*
 
 # Reports and editor
 reports/
+
+.stryker-tmp/
