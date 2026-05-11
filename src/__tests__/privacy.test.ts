@@ -59,8 +59,8 @@ describe('privacy', () => {
 
   describe('validation', () => {
     it('throws ValidationError when neither id nor appId is provided', async () => {
-      await expect(privacy({} as never)).rejects.toThrow(ValidationError);
-      await expect(privacy({} as never)).rejects.toThrow('Either id or appId is required');
+      await expect(privacy({})).rejects.toThrow(ValidationError);
+      await expect(privacy({})).rejects.toThrow('Either id or appId is required');
     });
 
     it('throws ValidationError for invalid country', async () => {

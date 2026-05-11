@@ -774,7 +774,7 @@ describe('common utilities', () => {
     it('should not throw when one of multiple fields is present', () => {
       expect(() => {
         validateRequiredField(
-          { id: undefined, appId: 'test' } as { id?: number; appId?: string },
+          { id: undefined, appId: 'test' },
           ['id', 'appId'],
           'Either id or appId required'
         );
@@ -783,14 +783,14 @@ describe('common utilities', () => {
 
     it('should throw when no required field is present', () => {
       expect(() => {
-        validateRequiredField({ id: undefined } as { id?: number }, ['id'], 'ID required');
+        validateRequiredField({ id: undefined }, ['id'], 'ID required');
       }).toThrow('ID required');
     });
 
     it('should throw when none of multiple fields are present', () => {
       expect(() => {
         validateRequiredField(
-          { id: undefined, appId: undefined } as { id?: number; appId?: string },
+          { id: undefined, appId: undefined },
           ['id', 'appId'],
           'Either id or appId required'
         );

@@ -81,8 +81,8 @@ describe('appPageDetails', () => {
   });
 
   it('throws ValidationError when neither id nor appId is provided', async () => {
-    await expect(appPageDetails({} as never)).rejects.toThrow(ValidationError);
-    await expect(appPageDetails({} as never)).rejects.toThrow('Either id or appId is required');
+    await expect(appPageDetails({})).rejects.toThrow(ValidationError);
+    await expect(appPageDetails({})).rejects.toThrow('Either id or appId is required');
   });
 
   it('resolves appId to numeric id before fetching', async () => {

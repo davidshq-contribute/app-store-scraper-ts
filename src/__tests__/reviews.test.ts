@@ -24,7 +24,7 @@ describe('reviews', () => {
   });
 
   it('should throw error when neither id nor appId is provided', async () => {
-    const err = await reviews({} as Parameters<typeof reviews>[0]).catch((e) => e);
+    const err = await reviews({}).catch((e) => e);
     expect(err).toBeInstanceOf(ValidationError);
     expect(err.message).toBe('Either id or appId is required');
     expect(err.field).toBe('id/appId');
@@ -163,9 +163,7 @@ describe('reviews', () => {
     const originalError = new Error('Network timeout');
     vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
 
-    const err = await reviews({ appId: 'com.test', page: 1 } as Parameters<
-      typeof reviews
-    >[0]).catch((e) => e);
+    const err = await reviews({ appId: 'com.test', page: 1 }).catch((e) => e);
     expect(err).not.toBeInstanceOf(HttpError);
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toBe('Could not resolve app id "com.test": Network timeout');
