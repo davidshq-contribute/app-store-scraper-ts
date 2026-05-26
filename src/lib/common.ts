@@ -143,10 +143,8 @@ export async function doRequest(url: string, options?: RequestOptions): Promise<
           ...(options?.headers ?? {}),
         },
         signal,
-        // Runtime: Node's global `fetch` accepts npm `undici` dispatchers. TypeScript: `RequestInit['dispatcher']`
-        // comes from `@types/node` (undici-types), which duplicates undici's types and does not unify with the
-        // package's `Agent` — `unknown` is the intentional bridge. Keep `undici` semver close to Node's embedded version.
-        dispatcher: fetchDispatcher as unknown as NonNullable<RequestInit['dispatcher']>,
+        // @ts-expect-error npm undici ComposedDispatcher vs @types/node RequestInit dispatcher (duplicate undici-types)
+        dispatcher: fetchDispatcher,
       });
 
       if (!response.ok) {

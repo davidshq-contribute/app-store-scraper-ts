@@ -129,6 +129,28 @@ describe('parseRatings', () => {
     expect(result.warnings![0]).toContain('999');
     expect(result.warnings![0]).toContain('does not match');
   });
+
+  it('returns clean empty result for Apple\'s "not enough ratings" sentinel page (English)', () => {
+    const html =
+      "<div class='customer-ratings'><h4>Customer Ratings</h4>" +
+      'This application hasn’t received enough ratings to display a summary.</div>';
+    const result = parseRatings(html);
+    expect(result.ratings).toBe(0);
+    expect(result.histogram).toEqual({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('returns clean empty result for the sentinel page regardless of locale (structural check)', () => {
+    // Same structure (.customer-ratings present, no .vote, no .rating-count)
+    // but with a hypothetical localized message. Must still be detected.
+    const html =
+      "<div class='customer-ratings'><h4>Bewertungen</h4>" +
+      'Diese App hat noch nicht genügend Bewertungen erhalten.</div>';
+    const result = parseRatings(html);
+    expect(result.ratings).toBe(0);
+    expect(result.histogram).toEqual({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    expect(result.warnings).toBeUndefined();
+  });
 });
 
 /** Build HTML with aria-label on each .vote row indicating star rating. */

@@ -58,6 +58,20 @@ export async function ratings(options: RatingsOptions): Promise<Ratings> {
 export function parseRatings(html: string): Ratings {
   const $ = cheerio.load(html);
 
+  // Apple's "not enough ratings to display a summary" sentinel page: the
+  // .customer-ratings block is present (proving we hit the right endpoint)
+  // but contains no .vote rows and no .rating-count. Locale-agnostic — the
+  // structural fingerprint is the same across storefronts even though the
+  // human-readable message is localized.
+  const $ratings = $('.customer-ratings');
+  if (
+    $ratings.length > 0 &&
+    $ratings.find('.vote').length === 0 &&
+    $ratings.find('.rating-count').length === 0
+  ) {
+    return { ratings: 0, histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
+  }
+
   function parseCountText(text: string): number {
     const normalized = text.replace(/\D/g, '');
     if (normalized === '') return 0;

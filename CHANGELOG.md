@@ -24,18 +24,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`version-history` tests** — Assert **`ValidationError.field`** for missing ids, invalid country, and non-positive numeric **`id`**.
 - **`reviews` tests** — Assert **`id`** validation (non-positive integers), **`HttpError`** propagation from **`doRequest`**, and **`HttpError`** for invalid JSON bodies before schema parse.
 - **`suggest.test.ts`:** Assert **`SUGGEST_XML_PARSER_OPTIONS`** (**`attributeNamePrefix: '@_'`**, **`ignoreAttributes: false`**) for fast-xml-parser plist parsing (mutation / contract).
+- **`ratings.test.ts`:** Assert **`parseRatings`** returns a clean zero histogram (no **`warnings`**) for Apple’s “not enough ratings” sentinel HTML, including a non-English structural fixture.
 
 ### Fixed
+
+- **`parseRatings` (Apple “not enough ratings” page)** — Detect the locale-agnostic sentinel (`.customer-ratings` present, no `.vote` / `.rating-count`) and return a zeroed histogram **without** `ratingHistogramWarnings`, instead of falling through to “Expected 5 star rating rows but found 0.” Fixes false-positive mismatch warnings for low-review apps (mac-store-crawler quarantine guard remains for older scraper builds).
 
 - **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
 
 ### Changed
 
+- **`package.json` (`overrides.qs`)** — Pin transitive **`qs`** to **6.15.2** (GHSA-q8mj-m7cp-5q26); **`@stryker-mutator/core`** → **`typed-rest-client`** had **`qs@6.15.1`**. Same policy as **mac-prototype** / **mac-store-crawler**; `npm audit fix` alone cannot bump nested deps.
+
+- **`.npmrc`** — Add **`min-release-age=10`** (same supply-chain delay policy as **mac-prototype** / **mac-store-crawler**).
+
+- **`undici`** (^8.x) — Bump direct dependency from 7.x; **`Agent`** / redirect interceptor usage in **`doRequest`** unchanged. **`cheerio`** still declares **`undici` ^7.x** (latest **1.2.0**); npm may install a nested 7.x copy for Cheerio’s optional **`fromURL`** path — harmless unless you add an override.
+
+- **`engines.node`** — Raise floor from **`>=20.0.0`** to **`>=22.19.0`** to match **`undici@8`**'s declared engines (undici 8 drops Node 20 LTS). README **Requirements** line updated accordingly. Volta pin (Node 24.14.0) already exceeded this; no developer-facing change.
+
+- **`package.json` (Volta)** — Pin **Node 24.14.0** and **npm 11.15.0** for toolchain parity with sibling repos.
+
 - **`typescript`** (^6.0.x) — Raise devDependency from 5.x to TypeScript 6. Add **`dts-for-tsup.json`** (extends **`tsconfig.json`**) with **`ignoreDeprecations`: `"6.0"`** for **tsup** only so DTS emit avoids TS5101 (**`baseUrl`** from the rollup DTS path); keep it off root **`tsconfig.json`** so editors / JSON schemas that only allow TS 5 values do not report an invalid **`ignoreDeprecations`**. **`tsup.config.ts`:** **`tsconfig: 'dts-for-tsup.json'`**. README Development summarizes **`tsconfig.json`** vs **`dts-for-tsup.json`**; **`package.json`** **`format`** / **`format:check`** run Prettier on **`*.config.ts`** and **`dts-for-tsup.json`** (and **`src/**/*.ts`**).
 
 - **`scripts/sync-mac-ai-cursor-rules.sh`**: Drop symlink for removed **`mac-ai`** rule **`test-and-code-fixes.mdc`** (content lives under **`engineering-standards.mdc`** and **`testing-standards.mdc`**).
 
-- **`doRequest` / `fetch` typing** — Document why `dispatcher` uses an `unknown` bridge between npm **`undici`** and `@types/node`’s `RequestInit`; cast target is `NonNullable<RequestInit['dispatcher']>`.
+- **`doRequest` / `fetch` typing** — Use `@ts-expect-error` on `fetch`’s `dispatcher` (npm **`undici`** `ComposedDispatcher` vs `@types/node` duplicate `undici-types`); avoids redundant type assertions flagged by ESLint.
 
 - **suggest():** Call `toString()` explicitly on `URLSearchParams` when building the request URL (avoids subtle string coercion issues). Export **`SUGGEST_XML_PARSER_OPTIONS`** (**fast-xml-parser** plist: **`ignoreAttributes: false`**, **`attributeNamePrefix: '@_'`**) for **`suggest()`** and unit tests; not re-exported from the package entry — deep-import from **`./lib/suggest.js`** only if you need the same contract.
 

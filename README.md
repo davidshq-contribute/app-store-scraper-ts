@@ -18,7 +18,7 @@ This is a complete TypeScript rewrite of [facundoolano/app-store-scraper](https:
 
 ## Installation
 
-**Requirements:** Node.js ≥20.
+**Requirements:** Node.js ≥22.19.
 
 This package is not published to npm. Install from GitHub:
 
