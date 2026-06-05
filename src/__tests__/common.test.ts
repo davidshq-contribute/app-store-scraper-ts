@@ -5,6 +5,7 @@ import {
   validateRequiredField,
   parseJson,
   resolveAppId,
+  ensureNumericAppId,
   doRequest,
   fetchAppPage,
   safeParseInt,
@@ -98,7 +99,20 @@ describe('common utilities', () => {
 
     it('throws ValidationError for invalid identifiers', () => {
       // Includes non-numeric strings, leading zeros, decimals, empty — but NOT '123'.
-      for (const value of [0, -1, 1.5, Number.NaN, Infinity, '0', '', '-1', '1.5', '01', '12abc', 'abc']) {
+      for (const value of [
+        0,
+        -1,
+        1.5,
+        Number.NaN,
+        Infinity,
+        '0',
+        '',
+        '-1',
+        '1.5',
+        '01',
+        '12abc',
+        'abc',
+      ]) {
         const err = getError(() => validatePositiveIntegerId(value, 'id'));
         expect(err).toBeInstanceOf(ValidationError);
         expect((err as ValidationError).field).toBe('id');
@@ -222,6 +236,72 @@ describe('common utilities', () => {
         expect.stringMatching(/itunes\.apple\.com\/lookup.*country=gb/),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('ensureNumericAppId', () => {
+    it('returns numeric id when id is provided', async () => {
+      const id = await ensureNumericAppId({ id: 553834731 });
+      expect(id).toBe(553834731);
+    });
+
+    it('returns string id unchanged when id is a positive-integer string', async () => {
+      const id = await ensureNumericAppId({ id: '553834731' });
+      expect(id).toBe('553834731');
+    });
+
+    it('prefers id over appId when both are provided', async () => {
+      const id = await ensureNumericAppId({ id: 123, appId: 'com.example.app' });
+      expect(id).toBe(123);
+    });
+
+    it('resolves appId via lookup when id is missing', async () => {
+      stubFetch(
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: () => Promise.resolve(minimalLookupJson(553834731)),
+        })
+      );
+      const id = await ensureNumericAppId({ appId: 'com.example.app' });
+      expect(id).toBe(553834731);
+    });
+
+    it('throws ValidationError with field id/appId when id is still missing', async () => {
+      const err = await ensureNumericAppId({}).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('id/appId');
+      expect((err as ValidationError).message).toBe('Either id or appId is required');
+    });
+
+    it('throws ValidationError with field id when id is not a positive integer', async () => {
+      const err = await ensureNumericAppId({ id: 0 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe('id');
+    });
+
+    it('wraps HttpError from resolveAppId preserving status', async () => {
+      stubFetch(
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify({ resultCount: 0, results: [] })),
+        })
+      );
+      const err = await ensureNumericAppId({ appId: 'com.nonexistent' }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).message).toBe(
+        'Could not resolve app id "com.nonexistent": App not found: com.nonexistent'
+      );
+      expect((err as HttpError).status).toBe(404);
+    });
+
+    it('wraps non-HttpError with cause preserved', async () => {
+      const networkErr = new Error('Network timeout');
+      stubFetch(vi.fn().mockRejectedValue(networkErr));
+      const err = await ensureNumericAppId({ appId: 'com.test' }).catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(HttpError);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toBe('Could not resolve app id "com.test": Network timeout');
+      expect((err as Error).cause).toBe(networkErr);
     });
   });
 

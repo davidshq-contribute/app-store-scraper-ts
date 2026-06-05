@@ -16,6 +16,11 @@
 - [`.cursor/skills/review-changes/SKILL.md`](.cursor/skills/review-changes/SKILL.md)
 - [`.cursor/skills/typescript-conventions/SKILL.md`](.cursor/skills/typescript-conventions/SKILL.md)
 - [`.cursor/skills/pragmatic-rating/SKILL.md`](.cursor/skills/pragmatic-rating/SKILL.md)
+- **OpenSpec (experimental):** [`.cursor/skills/openspec-explore/SKILL.md`](.cursor/skills/openspec-explore/SKILL.md), [`.cursor/skills/openspec-propose/SKILL.md`](.cursor/skills/openspec-propose/SKILL.md), [`.cursor/skills/openspec-apply-change/SKILL.md`](.cursor/skills/openspec-apply-change/SKILL.md), [`.cursor/skills/openspec-sync-specs/SKILL.md`](.cursor/skills/openspec-sync-specs/SKILL.md), [`.cursor/skills/openspec-archive-change/SKILL.md`](.cursor/skills/openspec-archive-change/SKILL.md) — Claude Code mirrors under **`.claude/skills/`** and **`.claude/commands/opsx/`**.
+
+## Slash commands
+
+- [`.cursor/commands/`](.cursor/commands/) — **`opsx-explore`**, **`opsx-propose`**, **`opsx-apply`**, **`opsx-sync`**, **`opsx-archive`** (OpenSpec experimental workflow; config in **`openspec/config.yaml`**).
 
 ## See also
 

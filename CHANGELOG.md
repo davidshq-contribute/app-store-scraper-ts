@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenSpec (experimental)** — Add **`openspec/config.yaml`** (spec-driven schema), Cursor **`/opsx-*`** commands under **`.cursor/commands/`**, matching skills under **`.cursor/skills/openspec-*`**, and parallel **`.claude/commands/opsx/`** + **`.claude/skills/openspec-*`** for Claude Code.
+
 - **`npm run test:mutation`** — Runs **Stryker** (`stryker run`; incremental by default per **`stryker.config.json`**). README Development section and Cursor/AI blurb document it next to **`npm run cursor-rules:sync`**.
 
 - **Cursor rules:** Symlink shared **`mac-ai`** rules into **`.cursor/rules/`** via **`scripts/sync-mac-ai-cursor-rules.sh`** and **`npm run cursor-rules:sync`** (engineering standards, documentation standards, AI standards, TypeScript standards). Slim **`.cursor/rules/project-standards.mdc`** to scraper-only content; update **`AGENTS.md`** accordingly.
@@ -33,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`doRequest` redirect limit** — Pass a composed Undici `Agent` (redirect interceptor, 64 hops) as `fetch`’s `dispatcher` so Apple amp-api / app-page requests are less likely to fail with `redirect count exceeded` on long redirect chains. Depends on **`undici`** (listed in `package.json`; external in the tsup bundle).
 
 ### Changed
+
+- **`ensureNumericAppId` (`common.ts`)** — Extract shared id/appId resolve-and-validate pipeline used by **`similar`**, **`reviews`**, **`privacy`**, **`versionHistory`**, and **`appPageDetails`**; consolidate coverage in **`common.test.ts`**.
 
 - **`package.json` (`overrides.qs`)** — Pin transitive **`qs`** to **6.15.2** (GHSA-q8mj-m7cp-5q26); **`@stryker-mutator/core`** → **`typed-rest-client`** had **`qs@6.15.1`**. Same policy as **mac-prototype** / **mac-store-crawler**; `npm audit fix` alone cannot bump nested deps.
 

@@ -22,7 +22,6 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     fetchAppPage: vi.fn(),
-    resolveAppId: vi.fn(),
   };
 });
 
@@ -77,37 +76,11 @@ const EMPTY_HTML = `
 describe('appPageDetails', () => {
   beforeEach(() => {
     vi.mocked(common.fetchAppPage).mockReset();
-    vi.mocked(common.resolveAppId).mockReset();
   });
 
   it('throws ValidationError when neither id nor appId is provided', async () => {
     await expect(appPageDetails({})).rejects.toThrow(ValidationError);
     await expect(appPageDetails({})).rejects.toThrow('Either id or appId is required');
-  });
-
-  it('resolves appId to numeric id before fetching', async () => {
-    vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
-    vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
-
-    await appPageDetails({ appId: 'com.example.app' });
-
-    expect(common.resolveAppId).toHaveBeenCalledWith({
-      appId: 'com.example.app',
-      country: DEFAULT_COUNTRY,
-      requestOptions: undefined,
-    });
-    expect(common.fetchAppPage).toHaveBeenCalledWith(
-      expect.stringContaining('id553834731'),
-      undefined
-    );
-  });
-
-  it('prefers id over appId when both are provided', async () => {
-    vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
-
-    await appPageDetails({ id: 123, appId: 'com.example.app' });
-
-    expect(common.resolveAppId).not.toHaveBeenCalled();
   });
 
   it('returns empty result on 404', async () => {

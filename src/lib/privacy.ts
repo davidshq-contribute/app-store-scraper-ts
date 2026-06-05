@@ -2,16 +2,8 @@ import * as cheerio from 'cheerio';
 import type { PrivacyDetails } from '../types/app-details.js';
 import type { PrivacyOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
-import {
-  appPageUrl,
-  fetchAppPage,
-  validateRequiredField,
-  resolveAppId,
-  wrapResolveAppIdError,
-  validatePositiveIntegerId,
-} from './common.js';
+import { appPageUrl, ensureNumericAppId, fetchAppPage, validateRequiredField } from './common.js';
 import { validateCountry } from './validate.js';
-import { ValidationError } from './errors.js';
 import { parsePrivacyFromHtml } from './parsers.js';
 
 /**
@@ -32,22 +24,9 @@ import { parsePrivacyFromHtml } from './parsers.js';
 export async function privacy(options: PrivacyOptions): Promise<PrivacyDetails> {
   validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
-  const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
+  const { country = DEFAULT_COUNTRY, requestOptions } = options;
   validateCountry(country);
-  let { id } = options;
-
-  if (appId != null && id == null) {
-    try {
-      id = await resolveAppId({ appId, country, requestOptions });
-    } catch (err) {
-      wrapResolveAppIdError(appId, err);
-    }
-  }
-
-  if (id == null) {
-    throw new ValidationError('Either id or appId is required', 'id/appId');
-  }
-  validatePositiveIntegerId(id, 'id');
+  const id = await ensureNumericAppId(options);
 
   const url = appPageUrl(country, id);
   const appPageBody = await fetchAppPage(url, requestOptions);

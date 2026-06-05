@@ -378,6 +378,44 @@ export function wrapResolveAppIdError(appId: string, err: unknown): never {
   throw new Error(message, { cause: err });
 }
 
+/** Options for {@link ensureNumericAppId}. */
+export interface EnsureNumericAppIdOptions {
+  id?: number | string | null;
+  appId?: string;
+  country?: string;
+  requestOptions?: RequestOptions;
+}
+
+/**
+ * Resolves `appId` to a numeric track id when needed, then validates `id`.
+ * Callers must run {@link validateRequiredField} first so at least one of `id` or `appId` is present.
+ *
+ * @returns Validated track id (number or positive-integer string)
+ * @throws {ValidationError} if `id` is still missing after resolution, or if `id` is not a positive integer
+ * @throws {HttpError} if `appId` lookup fails (preserves status/url via {@link wrapResolveAppIdError})
+ * @internal
+ */
+export async function ensureNumericAppId(
+  options: EnsureNumericAppIdOptions
+): Promise<number | string> {
+  const { appId, country = DEFAULT_COUNTRY, requestOptions } = options;
+  let { id } = options;
+
+  if (appId != null && id == null) {
+    try {
+      id = await resolveAppId({ appId, country, requestOptions });
+    } catch (err) {
+      wrapResolveAppIdError(appId, err);
+    }
+  }
+
+  if (id == null) {
+    throw new ValidationError('Either id or appId is required', 'id/appId');
+  }
+  validatePositiveIntegerId(id, 'id');
+  return id;
+}
+
 /**
  * Gets the Apple Store ID for a given country code.
  * Callers must validate the country code before calling this function.
@@ -438,8 +476,7 @@ export function validatePositiveIntegerId(
   value: unknown,
   field: string
 ): asserts value is number | string {
-  const isPositiveIntNumber =
-    typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+  const isPositiveIntNumber = typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
   // Positive integer string: one or more digits, no leading zero (rules out '', '0', '-1', '1.5', '12abc').
   const isPositiveIntString = typeof value === 'string' && /^[1-9]\d*$/.test(value);
   if (!isPositiveIntNumber && !isPositiveIntString) {

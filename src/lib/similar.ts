@@ -5,15 +5,12 @@ import type { SimilarOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import {
   appPageUrl,
+  ensureNumericAppId,
   fetchAppPage,
   validateRequiredField,
   lookup,
-  resolveAppId,
-  wrapResolveAppIdError,
-  validatePositiveIntegerId,
 } from './common.js';
 import { validateCountry } from './validate.js';
-import { ValidationError } from './errors.js';
 import { parseSimilarIdsFromHtml, getLinkTypeFromHeadingText } from './parsers.js';
 
 export { getLinkTypeFromHeadingText };
@@ -48,31 +45,9 @@ export async function similar(
 export async function similar(options: SimilarOptions): Promise<SimilarApp[] | App[]> {
   validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
-  const {
-    appId,
-    country = DEFAULT_COUNTRY,
-    lang,
-    requestOptions,
-    includeLinkType = false,
-  } = options;
+  const { country = DEFAULT_COUNTRY, lang, requestOptions, includeLinkType = false } = options;
   validateCountry(country);
-  let { id } = options;
-
-  // If appId is provided, resolve to id first (lightweight lookup only)
-  if (appId != null && id == null) {
-    try {
-      id = await resolveAppId({ appId, country, requestOptions });
-    } catch (err) {
-      wrapResolveAppIdError(appId, err);
-    }
-  }
-
-  // Defensive: unreachable if validateRequiredField + resolveAppId work correctly,
-  // but guards against future control-flow changes.
-  if (id == null) {
-    throw new ValidationError('Either id or appId is required', 'id/appId');
-  }
-  validatePositiveIntegerId(id, 'id');
+  const id = await ensureNumericAppId(options);
 
   // Build URL for main app page (contains similar apps embedded in HTML)
   const url = appPageUrl(country, id);

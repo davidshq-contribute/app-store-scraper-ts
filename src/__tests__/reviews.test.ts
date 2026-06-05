@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { reviews } from '../lib/reviews.js';
 import * as common from '../lib/common.js';
+import type { EnsureNumericAppIdOptions } from '../lib/common.js';
 import { sort as sortConstants } from '../types/constants.js';
 import { HttpError, ValidationError } from '../lib/errors.js';
 
@@ -13,14 +14,20 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     doRequest: vi.fn(),
-    resolveAppId: vi.fn(),
+    ensureNumericAppId: vi.fn((options: EnsureNumericAppIdOptions) =>
+      actual.ensureNumericAppId(options)
+    ),
   };
 });
 
 describe('reviews', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof common>('../lib/common.js');
     vi.mocked(common.doRequest).mockReset();
-    vi.mocked(common.resolveAppId).mockReset();
+    vi.mocked(common.ensureNumericAppId).mockReset();
+    vi.mocked(common.ensureNumericAppId).mockImplementation((options: EnsureNumericAppIdOptions) =>
+      actual.ensureNumericAppId(options)
+    );
   });
 
   it('should throw error when neither id nor appId is provided', async () => {
@@ -142,7 +149,7 @@ describe('reviews', () => {
     });
   });
 
-  describe('appId resolution path', () => {
+  it('uses resolved appId in reviews feed URL', async () => {
     const minimalFeed = {
       feed: {
         entry: [
@@ -159,33 +166,16 @@ describe('reviews', () => {
         ],
       },
     };
+    vi.mocked(common.ensureNumericAppId).mockResolvedValueOnce(553834731);
+    vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(minimalFeed));
 
-    it('calls resolveAppId when appId is given and id is not', async () => {
-      vi.mocked(common.resolveAppId).mockResolvedValue(553834731);
-      vi.mocked(common.doRequest).mockResolvedValue(JSON.stringify(minimalFeed));
+    const result = await reviews({ appId: 'com.example.app', country: 'us' });
 
-      const result = await reviews({ appId: 'com.example.app', country: 'us' });
-
-      expect(common.resolveAppId).toHaveBeenCalledWith({
-        appId: 'com.example.app',
-        country: 'us',
-        requestOptions: undefined,
-      });
-      expect(common.doRequest).toHaveBeenCalledWith(
-        expect.stringContaining('id=553834731'),
-        undefined
-      );
-      expect(result).toHaveLength(1);
-    });
-
-    it('throws HttpError preserving status when resolveAppId fails with HttpError', async () => {
-      vi.mocked(common.resolveAppId).mockRejectedValue(new HttpError('App not found', 404));
-
-      const err = await reviews({ appId: 'com.nonexistent.app' }).catch((e) => e);
-      expect(err).toBeInstanceOf(HttpError);
-      expect(err.message).toBe('Could not resolve app id "com.nonexistent.app": App not found');
-      expect(err.status).toBe(404);
-    });
+    expect(common.doRequest).toHaveBeenCalledWith(
+      expect.stringContaining('id=553834731'),
+      undefined
+    );
+    expect(result).toHaveLength(1);
   });
 
   it('throws ValidationError when API response fails schema validation', async () => {
@@ -195,17 +185,6 @@ describe('reviews', () => {
     await expect(reviews({ id: 553834731 })).rejects.toThrow(
       'Reviews API response validation failed'
     );
-  });
-
-  it('wraps non-HttpError in generic Error with cause preserved', async () => {
-    const originalError = new Error('Network timeout');
-    vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
-
-    const err = await reviews({ appId: 'com.test', page: 1 }).catch((e) => e);
-    expect(err).not.toBeInstanceOf(HttpError);
-    expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe('Could not resolve app id "com.test": Network timeout');
-    expect(err.cause).toBe(originalError);
   });
 
   describe('score parsing (BUG-1)', () => {

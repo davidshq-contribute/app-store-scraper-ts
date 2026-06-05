@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import { similar, getLinkTypeFromHeadingText } from '../lib/similar.js';
 import * as common from '../lib/common.js';
+import type { EnsureNumericAppIdOptions } from '../lib/common.js';
 import type { App } from '../types/app.js';
 import { DEFAULT_COUNTRY } from '../types/constants.js';
 import { runIntegrationTests } from './integration.js';
@@ -12,7 +13,9 @@ vi.mock('../lib/common.js', async (importOriginal) => {
     ...actual,
     fetchAppPage: vi.fn(),
     lookup: vi.fn(),
-    resolveAppId: vi.fn(),
+    ensureNumericAppId: vi.fn((options: EnsureNumericAppIdOptions) =>
+      actual.ensureNumericAppId(options)
+    ),
   };
 });
 
@@ -91,10 +94,14 @@ describe('similar', () => {
   });
 
   describe('fixture-based (no network)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof common>('../lib/common.js');
       vi.mocked(common.fetchAppPage).mockReset();
       vi.mocked(common.lookup).mockReset();
-      vi.mocked(common.resolveAppId).mockReset();
+      vi.mocked(common.ensureNumericAppId).mockReset();
+      vi.mocked(common.ensureNumericAppId).mockImplementation(
+        (options: EnsureNumericAppIdOptions) => actual.ensureNumericAppId(options)
+      );
     });
 
     it('extracts app ids and linkTypes from HTML snippet (section headings + app links)', async () => {
@@ -147,7 +154,7 @@ describe('similar', () => {
       vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
       vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(222, 'App 2')]);
 
-      const results = (await similar({ id: '111', country: DEFAULT_COUNTRY })) as App[];
+      const results = await similar({ id: '111', country: DEFAULT_COUNTRY });
 
       // 111 (the string id) is excluded; only 222 remains, and lookup was queried for [222] only.
       expect(results).toHaveLength(1);
@@ -171,9 +178,9 @@ describe('similar', () => {
       await expect(similar({ id: 999, country: DEFAULT_COUNTRY })).rejects.toThrow(err);
     });
 
-    it('uses resolveAppId when appId provided and id is null', async () => {
+    it('uses ensureNumericAppId when appId provided and id is null', async () => {
       const resolvedId = 842842640;
-      vi.mocked(common.resolveAppId).mockResolvedValueOnce(resolvedId);
+      vi.mocked(common.ensureNumericAppId).mockResolvedValueOnce(resolvedId);
       const html = `
         <body>
           <h2>Customers Also Bought</h2>
@@ -188,35 +195,14 @@ describe('similar', () => {
         country: DEFAULT_COUNTRY,
       });
 
-      expect(common.resolveAppId).toHaveBeenCalledWith({
-        appId: 'com.google.Docs',
-        country: DEFAULT_COUNTRY,
-        requestOptions: undefined,
-      });
+      expect(common.ensureNumericAppId).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appId: 'com.google.Docs',
+          country: DEFAULT_COUNTRY,
+        })
+      );
       expect(results).toHaveLength(1);
       expect(results[0]).toEqual(minimalApp(111, 'App 1'));
-    });
-
-    it('throws HttpError preserving status when resolveAppId fails with HttpError', async () => {
-      vi.mocked(common.resolveAppId).mockRejectedValueOnce(new HttpError('App not found', 404));
-
-      const err = await similar({ appId: 'com.nonexistent.app', country: DEFAULT_COUNTRY }).catch(
-        (e) => e
-      );
-      expect(err).toBeInstanceOf(HttpError);
-      expect(err.message).toBe('Could not resolve app id "com.nonexistent.app": App not found');
-      expect(err.status).toBe(404);
-    });
-
-    it('wraps non-HttpError with cause preserved', async () => {
-      const originalError = new Error('Bundle not found');
-      vi.mocked(common.resolveAppId).mockRejectedValueOnce(originalError);
-
-      const err = await similar({ appId: 'com.test', country: DEFAULT_COUNTRY }).catch((e) => e);
-      expect(err).not.toBeInstanceOf(HttpError);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Could not resolve app id "com.test": Bundle not found');
-      expect(err.cause).toBe(originalError);
     });
 
     it('filters undefined apps from lookup when some IDs are not found (includeLinkType: false)', async () => {
@@ -319,7 +305,7 @@ describe('similar', () => {
       const actual = await vi.importActual<typeof common>('../lib/common.js');
       vi.mocked(common.fetchAppPage).mockImplementation(actual.fetchAppPage);
       vi.mocked(common.lookup).mockImplementation(actual.lookup);
-      vi.mocked(common.resolveAppId).mockImplementation(actual.resolveAppId);
+      vi.mocked(common.ensureNumericAppId).mockImplementation(actual.ensureNumericAppId);
     });
 
     it('should fetch similar apps by ID (Google Docs)', { timeout: 15000 }, async () => {

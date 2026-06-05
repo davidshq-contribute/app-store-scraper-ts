@@ -15,7 +15,6 @@ vi.mock('../lib/common.js', async (importOriginal) => {
   return {
     ...actual,
     fetchAppPage: vi.fn(),
-    resolveAppId: vi.fn(),
   };
 });
 
@@ -62,7 +61,6 @@ const EMPTY_HTML = `<!DOCTYPE html><html><body><p>Nothing here</p></body></html>
 describe('versionHistory', () => {
   beforeEach(() => {
     vi.mocked(common.fetchAppPage).mockReset();
-    vi.mocked(common.resolveAppId).mockReset();
   });
 
   describe('validation', () => {
@@ -92,33 +90,6 @@ describe('versionHistory', () => {
       const errNeg = await versionHistory({ id: -1 }).catch((e: unknown) => e);
       expect(errNeg).toBeInstanceOf(ValidationError);
       expect((errNeg as ValidationError).field).toBe('id');
-    });
-  });
-
-  describe('appId resolution', () => {
-    it('resolves appId to numeric id before fetching', async () => {
-      vi.mocked(common.resolveAppId).mockResolvedValueOnce(553834731);
-      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
-
-      await versionHistory({ appId: 'com.example.app' });
-
-      expect(common.resolveAppId).toHaveBeenCalledWith({
-        appId: 'com.example.app',
-        country: DEFAULT_COUNTRY,
-        requestOptions: undefined,
-      });
-      expect(common.fetchAppPage).toHaveBeenCalledWith(
-        expect.stringContaining('id553834731'),
-        undefined
-      );
-    });
-
-    it('prefers id over appId when both are provided', async () => {
-      vi.mocked(common.fetchAppPage).mockResolvedValueOnce('<html></html>');
-
-      await versionHistory({ id: 123, appId: 'com.example.app' });
-
-      expect(common.resolveAppId).not.toHaveBeenCalled();
     });
   });
 

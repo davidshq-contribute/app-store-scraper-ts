@@ -3,14 +3,11 @@ import type { ReviewsOptions } from '../types/options.js';
 import { DEFAULT_COUNTRY, sort as sortConstants } from '../types/constants.js';
 import {
   doRequest,
+  ensureNumericAppId,
   validateRequiredField,
   ensureArray,
   parseAndValidate,
-  resolveAppId,
-  wrapResolveAppIdError,
-  validatePositiveIntegerId,
 } from './common.js';
-import { ValidationError } from './errors.js';
 import { validateCountry, validateSort, validateReviewsPage } from './validate.js';
 import { reviewsFeedSchema } from './schemas.js';
 
@@ -44,33 +41,16 @@ export async function reviews(options: ReviewsOptions): Promise<Review[]> {
   validateRequiredField(options, ['id', 'appId'], 'Either id or appId is required');
 
   const {
-    appId,
     page = 1,
     sort = sortConstants.RECENT,
     country = DEFAULT_COUNTRY,
     requestOptions,
   } = options;
-  let { id } = options;
 
   validateCountry(country);
   validateSort(sort);
   validateReviewsPage(page);
-
-  // If appId is provided, resolve to id first (lightweight lookup only)
-  if (appId != null && id == null) {
-    try {
-      id = await resolveAppId({ appId, country, requestOptions });
-    } catch (err) {
-      wrapResolveAppIdError(appId, err);
-    }
-  }
-
-  // Defensive: unreachable if validateRequiredField + resolveAppId work correctly,
-  // but guards against future control-flow changes.
-  if (id == null) {
-    throw new ValidationError('Either id or appId is required', 'id/appId');
-  }
-  validatePositiveIntegerId(id, 'id');
+  const id = await ensureNumericAppId(options);
 
   const url = `https://itunes.apple.com/${country}/rss/customerreviews/page=${page}/id=${id}/sortby=${sort}/json`;
 
