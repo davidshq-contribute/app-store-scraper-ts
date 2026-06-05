@@ -32,4 +32,7 @@ yarn-error.log*
 # Reports and editor
 reports/
 
+# Playwright MCP (Cursor) page snapshots — local only
+.playwright-mcp/
+
 .stryker-tmp/

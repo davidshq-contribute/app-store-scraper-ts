@@ -421,12 +421,28 @@ export function validateRequiredField<T extends object>(
 }
 
 /**
- * Validates a public numeric Apple identifier before URL/request construction.
- * Keeps JavaScript callers from passing NaN, Infinity, strings, decimals, or negative values.
+ * Validates a public Apple identifier before URL/request construction.
+ *
+ * Accepts either a positive integer `number` (safe-integer range) or a positive-integer
+ * `string` (all digits, no leading zero) — the id is only ever stringified into a request
+ * URL, so a numeric string is equivalent and is passed through unchanged. This matches the
+ * upstream ecosystem (facundoolano / plahteenlahti / itunes-app-scraper all accept loose
+ * ids), while still rejecting NaN, Infinity, decimals, negatives, and non-numeric strings.
+ *
+ * Numeric strings are NOT coerced to `number` (which would risk precision loss on IDs that
+ * exceed 2^53); they flow through as strings. Output `id` fields stay `number` per the
+ * ecosystem convention — only the input contract is loosened here.
  * @internal
  */
-export function validatePositiveIntegerId(value: unknown, field: string): asserts value is number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+export function validatePositiveIntegerId(
+  value: unknown,
+  field: string
+): asserts value is number | string {
+  const isPositiveIntNumber =
+    typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+  // Positive integer string: one or more digits, no leading zero (rules out '', '0', '-1', '1.5', '12abc').
+  const isPositiveIntString = typeof value === 'string' && /^[1-9]\d*$/.test(value);
+  if (!isPositiveIntNumber && !isPositiveIntString) {
     throw new ValidationError(`${field} must be a positive integer`, field);
   }
 }

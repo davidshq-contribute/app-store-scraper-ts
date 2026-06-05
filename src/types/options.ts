@@ -44,8 +44,8 @@ export interface ResolveAppIdOptions extends BaseOptions {
  * Options for the app() method
  */
 export interface AppOptions extends BaseOptions {
-  /** Track ID (numeric) */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID (e.g., com.example.app) */
   appId?: string;
   /** Whether to include rating histogram */
@@ -93,8 +93,8 @@ export interface SearchOptions extends BaseOptions {
  * Options for the developer() method
  */
 export interface DeveloperOptions extends BaseOptions {
-  /** Developer ID (artistId) - required */
-  devId: number;
+  /** Developer ID (artistId) - required (accepts a number or a numeric string) */
+  devId: number | string;
 }
 
 /**
@@ -102,8 +102,8 @@ export interface DeveloperOptions extends BaseOptions {
  * Omits `lang`: the reviews RSS feed is locale-based (determined by country/store-front), not per-request language.
  */
 export interface ReviewsOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID */
   appId?: string;
   /** Page number (1-10, default: 1) */
@@ -117,16 +117,16 @@ export interface ReviewsOptions extends Omit<BaseOptions, 'lang'> {
  * Omits `lang`: the customer-reviews endpoint uses the store-front header, not a language parameter.
  */
 export interface RatingsOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID (required) */
-  id: number;
+  /** Track ID (required — accepts a number or a numeric string) */
+  id: number | string;
 }
 
 /**
  * Options for the similar() method
  */
 export interface SimilarOptions extends BaseOptions {
-  /** Track ID */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID */
   appId?: string;
   /**
@@ -151,8 +151,8 @@ export interface SuggestOptions extends Omit<BaseOptions, 'country' | 'lang'> {
  * Omits `lang`: the App Store page does not vary privacy labels by language parameter.
  */
 export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID (e.g., com.example.app) */
   appId?: string;
 }
@@ -162,8 +162,8 @@ export interface PrivacyOptions extends Omit<BaseOptions, 'lang'> {
  * Omits `lang`: the App Store page renders version history in the store's locale, not per-request.
  */
 export interface VersionHistoryOptions extends Omit<BaseOptions, 'lang'> {
-  /** Track ID */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID (e.g., com.example.app) */
   appId?: string;
 }

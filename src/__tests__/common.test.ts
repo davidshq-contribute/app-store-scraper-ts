@@ -79,8 +79,26 @@ describe('common utilities', () => {
       expect(() => validatePositiveIntegerId(553834731, 'id')).not.toThrow();
     });
 
-    it('throws ValidationError for invalid numeric identifiers', () => {
-      for (const value of [0, -1, 1.5, Number.NaN, Infinity, '123']) {
+    it('accepts positive-integer strings (ids are stringified into the URL anyway)', () => {
+      // Loose input matches the upstream ecosystem (facundoolano / plahteenlahti /
+      // itunes-app-scraper). Numeric strings flow through unchanged.
+      expect(() => validatePositiveIntegerId('1', 'id')).not.toThrow();
+      expect(() => validatePositiveIntegerId('553834731', 'id')).not.toThrow();
+      expect(() => validatePositiveIntegerId('6504098179', 'id')).not.toThrow();
+    });
+
+    it('accepts a numeric string just past Number.MAX_SAFE_INTEGER without coercion', () => {
+      // The whole reason strings are not coerced to number: '9007199254740993' rounds to
+      // 9007199254740992 as a JS number. Accepting it as a string preserves the exact id.
+      const beyondSafe = '9007199254740993'; // Number.MAX_SAFE_INTEGER + 2
+      expect(() => validatePositiveIntegerId(beyondSafe, 'id')).not.toThrow();
+      // Sanity: round-tripping through a JS number corrupts this id; the string does not.
+      expect(String(Number(beyondSafe))).not.toBe(beyondSafe);
+    });
+
+    it('throws ValidationError for invalid identifiers', () => {
+      // Includes non-numeric strings, leading zeros, decimals, empty — but NOT '123'.
+      for (const value of [0, -1, 1.5, Number.NaN, Infinity, '0', '', '-1', '1.5', '01', '12abc', 'abc']) {
         const err = getError(() => validatePositiveIntegerId(value, 'id'));
         expect(err).toBeInstanceOf(ValidationError);
         expect((err as ValidationError).field).toBe('id');

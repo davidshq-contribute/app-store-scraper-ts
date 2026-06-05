@@ -30,8 +30,8 @@ import {
 
 /** Options for appPageDetails(). */
 export interface AppPageDetailsOptions {
-  /** Track ID */
-  id?: number;
+  /** Track ID (numeric — accepts a number or a numeric string) */
+  id?: number | string;
   /** Bundle ID (e.g., com.example.app) */
   appId?: string;
   /** Two-letter country code (default: us) */

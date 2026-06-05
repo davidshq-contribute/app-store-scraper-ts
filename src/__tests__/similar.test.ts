@@ -133,6 +133,29 @@ describe('similar', () => {
       expect(results[2]).toEqual({ app: minimalApp(333, 'App 3'), linkType: 'more-by-developer' });
     });
 
+    it('accepts a STRING id and self-excludes it (string excludeId path)', async () => {
+      // End-to-end guard for the loosened input contract: a track id passed as a string
+      // must (a) pass validation and (b) still drop the current app, which parseSimilarIdsFromHtml
+      // now compares on the canonical digit string rather than a parsed number.
+      const html = `
+        <body>
+          <h2>Customers Also Bought</h2>
+          <a href="https://apps.apple.com/us/app/self/id111">Self (current app)</a>
+          <a href="https://apps.apple.com/us/app/foo/id222">App 2</a>
+        </body>
+      `;
+      vi.mocked(common.fetchAppPage).mockResolvedValueOnce(html);
+      vi.mocked(common.lookup).mockResolvedValueOnce([minimalApp(222, 'App 2')]);
+
+      const results = (await similar({ id: '111', country: DEFAULT_COUNTRY })) as App[];
+
+      // 111 (the string id) is excluded; only 222 remains, and lookup was queried for [222] only.
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe(222);
+      expect(results.some((a) => a.id === 111)).toBe(false);
+      expect(vi.mocked(common.lookup).mock.calls[0]?.[0]).toEqual([222]);
+    });
+
     it('returns [] when fetchAppPage returns null (app page not found)', async () => {
       vi.mocked(common.fetchAppPage).mockResolvedValueOnce(null);
 

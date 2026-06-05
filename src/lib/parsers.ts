@@ -102,9 +102,12 @@ export function parsePrivacyFromHtml($: cheerio.CheerioAPI): PrivacyDetails {
  */
 export function parseSimilarIdsFromHtml(
   $: cheerio.CheerioAPI,
-  excludeId: number
+  excludeId: number | string
 ): SimilarIdEntry[] {
   const entries: SimilarIdEntry[] = [];
+  // Compare on the canonical digit string so a numeric-string excludeId (now allowed by
+  // validatePositiveIntegerId) still excludes the current app without precision loss.
+  const excludeIdStr = String(excludeId);
   const seen = new Set<string>();
   let currentLinkType: SimilarLinkType = 'other';
   let seenKnownSection = false;
@@ -123,7 +126,7 @@ export function parseSimilarIdsFromHtml(
           if (match && match[1]) {
             const appIdNum = parseInt(match[1], 10);
             const key = `${appIdNum}:${currentLinkType}`;
-            if (appIdNum !== excludeId && !seen.has(key)) {
+            if (match[1] !== excludeIdStr && !seen.has(key)) {
               seen.add(key);
               entries.push({ id: appIdNum, linkType: currentLinkType });
             }
